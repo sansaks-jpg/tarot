@@ -47,18 +47,16 @@ Navigasi atas (`.room-nav`) memudahkan perpindahan antara Beranda, Baca Tarot (y
 
 ## Suara dan Persona Sela
 
-Browser meminta token sementara ke server, lalu tersambung langsung ke Gemini Live. REST token memakai `bidiGenerateContentSetup` untuk mengunci model, voice (`Aoede`), dan instruksi. Konfigurasi `liveConnectConstraints` adalah bentuk SDK, bukan field REST yang diterima endpoint saat pemeriksaan ini.
+Sela menggunakan 422 klip audio pra-rekam (*pre-recorded*) yang telah dikompresi ke format MP3 mono 48kbps yang sangat ringan (total hanya ~22,8 MB untuk seluruh 422 file audio). Seluruh klip dimuat langsung dari aset situs tanpa latensi jaringan dan tanpa memakan kuota token API saat pengunjung bermain, sehingga siap dijalankan di Cloudflare Pages maupun secara offline. Jika klip audio lokal tidak ditemukan, sistem tetap mempertahankan jalur fallback streaming Gemini Live.
 
 Narasi Sela dirancang layaknya pembaca kartu tarot sungguhan—intim, empatik, dan mengalir natural tanpa kalimat klise/AI slop:
 - **Sambutan Personal:** Di beranda dan layar bacaan, Sela menyapa hangat dan mengajak penanya menenangkan diri serta memilih bagian hidup yang paling butuh kejelasan.
 - **Komentar Interaktif Setiap Gerakan:** Sela menanggapi pilihan topik (Asmara, Karir, Diri, Umum), pilihan pertanyaan, penarikan kartu satu per satu di meja kocokan (1/3, 2/3, 3/3), kocok ulang, hingga pesan penutup reflektif di akhir sesi.
 - **Pembacaan Kartu Kontekstual:** Pembacaan kartu tidak sekadar membacakan kamus template, melainkan menggabungkan observasi intuisi posisi (kartu 1: akar batin; kartu 2: pergulatan/tantangan internal; kartu 3: lentera langkah) serta dinamika energi arcana (Swords untuk overthinking/pikiran bising, Cups untuk kerentanan rasa, Wands untuk ritme energi, Pentacles untuk kepastian nyata, Major untuk siklus besar hidup).
 - **Struktur Tiga Bab:** Setiap kartu diuraikan dalam tiga bab bertahap: Makna batin, Langkah nyata sehari-hari, dan Refleksi hening.
-- **Ekspresi Vokal Alami:** Disertai filler vokal intuitif (*"emmm"*, *"hmm"*, *"wah"*, *"waduh"*) dan jeda elipsis pada prompt Gemini Live untuk menghasilkan intonasi percakapan yang hidup dan bernyawa.
+- **Ekspresi Vokal Alami:** Disertai filler vokal intuitif (*"emmm"*, *"hmm"*, *"wah"*, *"waduh"*) dan jeda elipsis untuk menghasilkan intonasi percakapan yang hidup dan bernyawa.
 
-Satu koneksi dipakai sepanjang sesi. Bacaan pertama disiapkan saat tiga kartu sudah dipilih; bagian berikutnya disiapkan saat bagian saat ini berbicara. PCM dimainkan per potongan dengan penyangga 35 ms, tanpa menunggu satu respons selesai. Latensi layanan/jaringan tetap dapat terjadi. Suara hanya Gemini; jika layanan gagal, pesan di game meminta pemain melanjutkan dengan teks.
-
-Pertanyaan pribadi tidak dikirim ke Gemini. Hanya nama kartu dan teks bacaan yang dikirim. Suara dimulai setelah sentuhan pemain. Musik memakai berkas ambient dengan loop, efek memakai rekaman kartu; musik mengecil saat Sela berbicara. Tombol volume mengatur musik, efek dan narasi.
+Suara dimulai setelah sentuhan pemain. Musik memakai berkas ambient dengan loop, efek memakai rekaman kartu; musik mengecil (*ducking*) saat Sela berbicara. Tombol volume mengatur musik, efek, dan narasi.
 
 Di HP, foto Sela yang sama (`welcome-room.webp`) tetap menjadi latar dari beranda, pilihan pertanyaan, pemilihan kartu, hingga bacaan dan hasil. Latar dipasang sekali di luar layar yang berganti; kartu dan panel percakapan berada di atas meja. Layar pemilihan dan bacaan mengikuti tinggi viewport HP. Teks narasi dibagi menjadi bagian pendek; bagian berikutnya muncul setelah suara selesai, dan pemain membuka setiap kartu sendiri. Kartu yang terbuka dapat disentuh untuk melihat detail. Koleksi kartu memakai halaman terpisah.
 

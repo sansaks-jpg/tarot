@@ -5,6 +5,16 @@ import {
   getAudioContext,
 } from "./audio.js?v=room-4";
 
+let naskahModule = null;
+async function getNaskah() {
+  if (!naskahModule && typeof window !== "undefined") {
+    try {
+      naskahModule = await import("./naskah.js?v=room-4");
+    } catch {}
+  }
+  return naskahModule;
+}
+
 // One Live connection per reading. Generation and playback have separate lifetimes:
 // changing a passage clears playback while an in-flight response drains to cache.
 export class LiveNarrator {
@@ -12,6 +22,7 @@ export class LiveNarrator {
     this.ctx = null;
     this.gain = null;
     this.sources = new Set();
+    this.clipBuffers = new Map();
     this.job = 0;
     this.mode = "none";
     this.socket = null;
@@ -253,8 +264,32 @@ export class LiveNarrator {
   }
 
   prepare(passage, card) {
-    if (this.mode !== "gemini" || !audioEnabled() || !passage) return;
-    this.request(passage, card).promise.catch(() => {});
+    if (!audioEnabled() || !passage) return;
+    getNaskah().then((naskah) => {
+      const clipId = naskah?.findClipId?.(passage);
+      if (clipId) {
+        if (!this.clipBuffers?.has(clipId)) {
+          fetch(naskah.getClipAudioUrl(clipId))
+            .then((r) => (r.ok ? r.arrayBuffer() : null))
+            .then((ab) => (ab && this.ctx ? this.ctx.decodeAudioData(ab) : null))
+            .then((buf) => {
+              if (buf) {
+                if (!this.clipBuffers) this.clipBuffers = new Map();
+                this.clipBuffers.set(clipId, buf);
+              }
+            })
+            .catch(() => {});
+        }
+        return;
+      }
+      if (this.mode === "gemini") {
+        this.request(passage, card).promise.catch(() => {});
+      }
+    }).catch(() => {
+      if (this.mode === "gemini") {
+        this.request(passage, card).promise.catch(() => {});
+      }
+    });
   }
 
   pump() {
@@ -372,11 +407,70 @@ export class LiveNarrator {
     );
   }
 
+  async playPreRecorded(clipId, status, done) {
+    const job = this.job;
+    const naskah = await getNaskah();
+    const url = naskah ? naskah.getClipAudioUrl(clipId) : `/assets/audio/clips/${clipId}.mp3`;
+    status("Sela sedang membaca", true);
+    duckMusic(true);
+
+    try {
+      if (!this.clipBuffers) this.clipBuffers = new Map();
+      let buffer = this.clipBuffers.get(clipId);
+      if (!buffer) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Audio clip unavailable");
+        const arrayBuf = await response.arrayBuffer();
+        buffer = await this.ctx.decodeAudioData(arrayBuf);
+        this.clipBuffers.set(clipId, buffer);
+      }
+
+      if (job !== this.job) {
+        duckMusic(false);
+        return;
+      }
+
+      const source = this.ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(this.gain);
+      this.sources.add(source);
+
+      source.onended = () => {
+        this.sources.delete(source);
+        if (job !== this.job) return;
+        duckMusic(false);
+        status("", false);
+        done();
+      };
+
+      source.start(0);
+    } catch {
+      if (job !== this.job) return;
+      duckMusic(false);
+      status("", false);
+      done();
+    }
+  }
+
   async speak(passage, card, status = () => {}, done = () => {}) {
     this.stop();
     const job = this.job;
     if (!audioEnabled() || this.mode === "none") return;
     this.unlock();
+
+    if (this.ctx?.state !== "running") {
+      try {
+        await this.ctx?.resume();
+      } catch {}
+    }
+    if (job !== this.job) return;
+
+    const naskah = await getNaskah();
+    const clipId = naskah?.findClipId?.(passage);
+    if (clipId) {
+      await this.playPreRecorded(clipId, status, done);
+      return;
+    }
 
     status("Menyiapkan suara…", false);
     const entry = this.request(passage, card, true);
@@ -388,12 +482,6 @@ export class LiveNarrator {
       done,
       startedAt: performance.now(),
     };
-    if (this.ctx?.state !== "running") {
-      try {
-        await this.ctx?.resume();
-      } catch {}
-    }
-    if (job !== this.job) return;
     if (!this.ctx || this.ctx.state !== "running") {
       status("Ketuk tombol lanjut untuk mengaktifkan suara.", false);
       return;

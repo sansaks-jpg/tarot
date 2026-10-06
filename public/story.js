@@ -1,3 +1,5 @@
+import { getCardClips, getClipText } from "./naskah.js?v=room-4";
+
 // Short, complete text passages for the visual novel reader.
 export function passages(text, limit = 190) {
   const sentences = String(text).match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [""];
@@ -75,13 +77,19 @@ function formatMeaning(card, options = {}) {
 }
 
 export function cardStory(card, chapter = "makna", limit = 190, options = {}) {
+  const clips = getCardClips(card, chapter, options);
+  if (clips.length) {
+    return clips.map((id) => getClipText(id)).filter(Boolean);
+  }
   if (chapter === "gambar") {
+    const m1 = getClipText(`${card.id}-M1`);
+    if (m1) return [m1];
     return card.symbols.flatMap((text) =>
       passages(`Coba perhatikan detail simbolnya... ${text}`, limit),
     );
   }
   if (chapter === "langkah") {
-    return passages(`Emmm, kalau kita bawa ke langkah nyata sehari-hari: ${card.action}`, limit);
+    return passages(`Kalau kita bawa ke langkah nyata sehari-hari: ${card.action}`, limit);
   }
   if (chapter === "refleksi") {
     return passages(`Coba renungkan sejenak di dalam hatimu... ${card.prompt}`, limit);
