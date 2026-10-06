@@ -52,6 +52,6 @@ Foto ruang/pembaca merupakan aset generatif. Palette dan logo mengikuti referens
 
 ## Pemeriksaan
 
-`npm run check` memeriksa data 78 kartu, batas tiga kartu, simpan/ekspor, input HTML, template layar, konfigurasi Cloudflare, penjadwalan PCM/koneksi/cache Gemini, dan streaming byte-range lokal. Pemeriksaan server memanggil handler langsung tanpa menyalakan server tambahan atau membaca `.env`.
+`npm run check` memeriksa data 78 kartu, batas tiga kartu, simpan/ekspor, input HTML, template layar, konfigurasi Cloudflare, dan penjadwalan PCM/koneksi/cache Gemini. Pemeriksaan ini berjalan tanpa hasil build sebelumnya.
 
-`npm run build` menjalankan pemeriksaan sebelum menyalin hasil. Browser tetap diperlukan untuk memeriksa animasi, tata letak, kebijakan autoplay, dan suara nyata.
+`npm run build` menjalankan pemeriksaan sumber, membuat `dist`, lalu menjalankan `npm run check:build` untuk memeriksa streaming byte-range dari berkas yang baru dibuat. Pemeriksaan server memanggil handler langsung tanpa menyalakan server tambahan atau membaca `.env`. Urutan ini juga berlaku pada checkout baru di Cloudflare. Browser tetap diperlukan untuk memeriksa animasi, tata letak, kebijakan autoplay, dan suara nyata.
