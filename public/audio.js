@@ -1,114 +1,67 @@
-// Procedural soundtrack and card sounds; enabled at 100% on first load.
-let ctx,
-  master,
-  music,
-  bus,
-  enabled = true,
+// Recorded music and card foley. Audio files are requested after a user gesture.
+let ctx, master, music, effects, soundtrack;
+let enabled = true,
   volume = 1,
-  timer,
-  lastChord = 0;
-const voices = new Set();
-const chords = [
-  [130.81, 164.81, 196, 261.63],
-  [174.61, 220, 261.63, 329.63],
-  [196, 246.94, 293.66, 392],
-  [164.81, 220, 261.63, 329.63],
-];
+  ducked = false;
+const buffers = new Map(),
+  pending = new Map(),
+  sources = new Set();
+const files = ["shuffle", "fan", "slide", "place", "turn"];
+
 function context() {
-  if (ctx) return true;
-  const Audio = globalThis.AudioContext || globalThis.webkitAudioContext;
-  if (!Audio) return false;
-  ctx = new Audio();
+  if (ctx) return ctx;
+  const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
+  if (!AudioContext) return null;
+  ctx = new AudioContext({ latencyHint: "interactive" });
   master = ctx.createGain();
   master.gain.value = enabled ? volume : 0;
   master.connect(ctx.destination);
   music = ctx.createGain();
-  music.gain.value = 0.42;
+  music.gain.value = ducked ? 0.16 : 0.66;
   music.connect(master);
-  bus = ctx.createGain();
-  bus.gain.value = 0.62;
-  bus.connect(master);
-  ctx.addEventListener("statechange", () => {
-    if (enabled && !document.hidden && ctx.state === "running") startMusic();
-  });
-  return true;
-}
-function tone(frequency, start, duration, gain, target = bus, type = "sine") {
-  const oscillator = ctx.createOscillator(),
-    envelope = ctx.createGain();
-  oscillator.type = type;
-  oscillator.frequency.value = frequency;
-  envelope.gain.setValueAtTime(0.0001, start);
-  envelope.gain.exponentialRampToValueAtTime(
-    gain,
-    start +
-      (target === music
-        ? Math.min(2.1, duration * 0.35)
-        : Math.min(0.08, duration * 0.2)),
-  );
-  envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  oscillator.connect(envelope);
-  envelope.connect(target);
-  voices.add(oscillator);
-  oscillator.onended = () => {
-    voices.delete(oscillator);
-    oscillator.disconnect();
-    envelope.disconnect();
-  };
-  oscillator.start(start);
-  oscillator.stop(start + duration + 0.03);
-}
-function ambient() {
-  if (!enabled || document.hidden || ctx.state !== "running") return;
-  const notes = chords[lastChord++ % chords.length],
-    now = ctx.currentTime;
-  notes.forEach((frequency, i) =>
-    tone(frequency, now + i * 0.14, 8.5, 0.027, music),
-  );
-  [2, 1, 3, 2, 0, 2, 1, 3].forEach((note, i) =>
-    tone(notes[note] * 2, now + 0.35 + i * 0.72, 0.5, 0.052, music, "triangle"),
-  );
-}
-function startMusic() {
-  if (timer || !enabled || document.hidden || ctx.state !== "running") return;
-  ambient();
-  timer = setInterval(ambient, 6500);
-}
-function stopMusic() {
-  clearInterval(timer);
-  timer = undefined;
-  for (const voice of voices) {
-    try {
-      voice.stop(ctx.currentTime + 0.08);
-    } catch {}
+  effects = ctx.createGain();
+  effects.gain.value = 0.95;
+  effects.connect(master);
+  soundtrack = new Audio("/assets/audio/room.m4a");
+  soundtrack.preload = "none";
+  soundtrack.loop = true;
+  ctx.createMediaElementSource(soundtrack).connect(music);
+  for (const file of files) {
+    const promise = fetch(`/assets/audio/${file}.mp3`)
+      .then((response) => {
+        if (!response.ok) throw new Error("Audio unavailable");
+        return response.arrayBuffer();
+      })
+      .then((data) => ctx.decodeAudioData(data))
+      .then((buffer) => buffers.set(file, buffer))
+      .catch(() => {});
+    pending.set(file, promise);
   }
+  return ctx;
 }
+
+export const getAudioContext = () => context();
+export const audioVolume = () => Math.round(volume * 100);
+export const audioEnabled = () => enabled;
+const changed = () => globalThis.dispatchEvent?.(new Event("room-volume"));
+
 export function primeAudio() {
   if (!enabled || document.hidden || !context()) return false;
-  master.gain.setTargetAtTime(volume, ctx.currentTime, 0.1);
-  // Attempt autoplay immediately; a suspended browser resumes on any first gesture.
-  if (ctx.state !== "running")
-    ctx
-      .resume()
-      .then(startMusic)
-      .catch(() => {});
-  else startMusic();
+  master.gain.setTargetAtTime(volume, ctx.currentTime, 0.035);
+  // Keep play() in the gesture's call stack for mobile autoplay policies.
+  ctx.resume().catch(() => {});
+  soundtrack.play().catch(() => {});
   return true;
 }
 export function duckMusic(on) {
+  ducked = on;
   if (ctx && music)
-    music.gain.setTargetAtTime(on ? 0.07 : 0.42, ctx.currentTime, 0.2);
-}
-export function audioVolume() {
-  return Math.round(volume * 100);
-}
-export function audioEnabled() {
-  return enabled;
+    music.gain.setTargetAtTime(on ? 0.16 : 0.66, ctx.currentTime, 0.15);
 }
 export async function enableAudio() {
   enabled = true;
   primeAudio();
-  globalThis.dispatchEvent?.(new Event("sela-volume"));
+  changed();
   return true;
 }
 export async function toggleAudio() {
@@ -116,90 +69,56 @@ export async function toggleAudio() {
   enabled = !enabled;
   if (enabled) primeAudio();
   else {
-    master.gain.setTargetAtTime(0, ctx.currentTime, 0.04);
-    stopMusic();
+    soundtrack.pause();
+    master.gain.setTargetAtTime(0, ctx.currentTime, 0.025);
+    for (const source of sources) {
+      try {
+        source.stop();
+      } catch {}
+    }
   }
-  globalThis.dispatchEvent?.(new Event("sela-volume"));
+  changed();
   return enabled;
 }
 export function setVolume(value) {
   if (!Number.isFinite(Number(value))) return;
   volume = Math.max(0, Math.min(1, Number(value) / 100));
-  if (ctx && enabled)
-    master.gain.setTargetAtTime(volume, ctx.currentTime, 0.05);
-  globalThis.dispatchEvent?.(new Event("sela-volume"));
+  if (ctx)
+    master.gain.setTargetAtTime(enabled ? volume : 0, ctx.currentTime, 0.03);
+  changed();
 }
 export function sfx(name) {
-  if (!enabled || !ctx || ctx.state !== "running") return;
-  const t = ctx.currentTime;
-  if (name === "shuffle") {
-    const buffer = ctx.createBuffer(
-        1,
-        Math.floor(ctx.sampleRate * 0.45),
-        ctx.sampleRate,
-      ),
-      data = buffer.getChannelData(0);
-    for (let i = 0; i < data.length; i++) {
-      const pulse = Math.max(
-        0,
-        Math.sin((i / ctx.sampleRate) * 2 * Math.PI * 15),
-      );
-      data[i] = (Math.random() * 2 - 1) * pulse * (1 - i / data.length);
-    }
-    const noise = ctx.createBufferSource(),
-      filter = ctx.createBiquadFilter(),
-      gain = ctx.createGain();
-    noise.buffer = buffer;
-    filter.type = "bandpass";
-    filter.frequency.value = 1700;
-    filter.Q.value = 0.5;
-    gain.gain.value = 0.12;
-    noise.connect(filter);
-    filter.connect(gain);
-    gain.connect(bus);
-    noise.onended = () => {
-      noise.disconnect();
-      filter.disconnect();
-      gain.disconnect();
-    };
-    noise.start();
-    return;
-  }
-  if (name === "reveal") {
-    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>
-      tone(
-        f,
-        t + 0.34 + i * 0.1,
-        0.85,
-        0.075 / (1 + i * 0.28),
-        bus,
-        "triangle",
-      ),
-    );
-    return;
-  }
-  if (name === "complete") {
-    [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5].forEach((f, i) =>
-      tone(f, t + i * 0.14, 0.65, 0.07, bus, "triangle"),
-    );
-    return;
-  }
-  if (name === "save") {
-    [349.23, 440, 523.25].forEach((f, i) => tone(f, t + i * 0.09, 0.7, 0.07));
-    return;
-  }
-  if (name === "select") {
-    tone(659.25, t, 0.14, 0.055, bus, "triangle");
-    tone(783.99, t + 0.055, 0.21, 0.045, bus, "triangle");
-    return;
-  }
-  tone(293.66, t, 0.35, 0.07);
-  tone(440, t + 0.055, 0.42, 0.03);
+  if (!enabled || document.hidden || ctx?.state !== "running") return;
+  const file =
+    {
+      select: "slide",
+      reveal: "turn",
+      complete: "place",
+      save: "place",
+      next: "slide",
+    }[name] || name;
+  const buffer = buffers.get(file);
+  if (!buffer) return; // Never play a late effect after its animation has finished.
+  const source = ctx.createBufferSource(),
+    gain = ctx.createGain();
+  source.buffer = buffer;
+  source.playbackRate.value =
+    name === "select" ? 0.96 + Math.random() * 0.08 : 1;
+  gain.gain.value = ["shuffle", "fan", "reveal"].includes(name) ? 1 : 0.75;
+  source.connect(gain);
+  gain.connect(effects);
+  sources.add(source);
+  source.onended = () => {
+    sources.delete(source);
+    source.disconnect();
+    gain.disconnect();
+  };
+  source.start();
 }
 document.addEventListener("visibilitychange", () => {
   if (!ctx) return;
   if (document.hidden) {
-    stopMusic();
+    soundtrack.pause();
     ctx.suspend().catch(() => {});
   } else if (enabled) primeAudio();
 });

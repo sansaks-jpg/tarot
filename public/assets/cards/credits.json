@@ -1,0 +1,13 @@
+{
+  "deck": "Rider-Waite-Smith",
+  "repository": "https://github.com/mixvlad/TarotCards",
+  "source": "https://github.com/mixvlad/TarotCards/tree/main/tarot/rider-waite",
+  "artist": "Pamela Colman Smith",
+  "designer": "Arthur Edward Waite",
+  "year": 1909,
+  "license": "Public Domain (as documented by the source repository)",
+  "changes": "Resized to 400px and 240px, encoded as WebP; artwork unchanged",
+  "cardCount": 78,
+  "totalBytes": 4227114,
+  "thumbnailBytes": 1651546
+}

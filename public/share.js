@@ -1,159 +1,249 @@
-import { BY_ID } from "./deck.js";
+import { BY_ID, POSITIONS } from "./deck.js?v=room-4";
 
 export function websiteURL() {
   const canonical = document.querySelector('link[rel="canonical"]')?.href;
   const url = new URL(canonical || location.origin);
   return url.origin + "/";
 }
-function rounded(ctx, x, y, w, h, r, fill) {
+
+function rounded(ctx, x, y, w, h, r, fill, stroke = null, lineWidth = 1) {
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
-  ctx.fillStyle = fill;
-  ctx.fill();
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+  }
 }
+
 function textLines(ctx, text, maxWidth) {
-  const words = text.split(/\s+/),
-    lines = [];
+  const words = text.split(/\s+/);
+  const lines = [];
   let line = "";
   for (const word of words) {
     const next = line ? line + " " + word : word;
     if (line && ctx.measureText(next).width > maxWidth) {
       lines.push(line);
       line = word;
-    } else line = next;
+    } else {
+      line = next;
+    }
   }
   if (line) lines.push(line);
   return lines;
 }
+
 function centeredText(ctx, text, y, width, font, color, lineHeight = 40) {
   ctx.font = font;
   ctx.fillStyle = color;
   ctx.textAlign = "center";
-  for (const [i, line] of textLines(ctx, text, width).entries())
+  for (const [i, line] of textLines(ctx, text, width).entries()) {
     ctx.fillText(line, 540, y + i * lineHeight);
+  }
 }
+
 async function cardImage(id) {
   const image = new Image();
-  image.src = new URL(`/assets/cards/${id}.svg`, location.origin).href;
+  image.src = new URL(`/assets/cards/${id}.webp`, location.origin).href;
   await image.decode();
   return image;
 }
+
+async function loadLogo() {
+  try {
+    const img = new Image();
+    img.src = new URL("/assets/brand.webp", location.origin).href;
+    await img.decode();
+    return img;
+  } catch {
+    return null;
+  }
+}
+
 export async function createShareImage(ids) {
   if (
     !Array.isArray(ids) ||
     ![1, 3].includes(ids.length) ||
     ids.some((id) => !BY_ID[id])
-  )
+  ) {
     throw new Error("Kartu belum siap dibagikan.");
-  const images = await Promise.all(ids.map(cardImage));
+  }
+
+  const [images, logo] = await Promise.all([
+    Promise.all(ids.map(cardImage)),
+    loadLogo(),
+  ]);
+
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
   canvas.height = 1350;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Gambar belum didukung browser ini.");
-  ctx.fillStyle = "#faf7f0";
+
+  // Base background: Mystic Black Velvet (#161817) with subtle warm radial glow
+  ctx.fillStyle = "#161817";
   ctx.fillRect(0, 0, 1080, 1350);
-  ctx.fillStyle = "#222126";
-  ctx.textAlign = "left";
-  ctx.font = "bold 66px Arial, sans-serif";
-  ctx.fillText("✦ sela", 72, 114);
-  rounded(ctx, 803, 66, 205, 56, 16, "#ffedac");
-  ctx.fillStyle = "#654d99";
+
+  const radial = ctx.createRadialGradient(540, 675, 50, 540, 675, 750);
+  radial.addColorStop(0, "rgba(122, 29, 36, 0.45)"); // Deep velvet red glow
+  radial.addColorStop(0.7, "rgba(58, 42, 26, 0.2)"); // Rustic wood
+  radial.addColorStop(1, "rgba(22, 24, 23, 0.95)");
+  ctx.fillStyle = radial;
+  ctx.fillRect(0, 0, 1080, 1350);
+
+  // Outer border with Celestial Gold (#E5AB3A)
+  ctx.strokeStyle = "#E5AB3A";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(36, 36, 1008, 1278);
+  ctx.strokeStyle = "rgba(229, 171, 58, 0.4)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(46, 46, 988, 1258);
+
+  // Logo rendering
+  if (logo) {
+    const logoW = 320;
+    const logoH = (logo.height / logo.width) * logoW;
+    ctx.drawImage(logo, (1080 - logoW) / 2, 70, logoW, logoH);
+  } else {
+    ctx.fillStyle = "#E5AB3A";
+    ctx.textAlign = "center";
+    ctx.font = "bold 56px 'Times New Roman', serif";
+    ctx.fillText("THE TAROT ROOM", 540, 130);
+  }
+
+  // Tagline & Badge
+  rounded(ctx, 390, 240, 300, 46, 23, "#7A1D24", "#E5AB3A", 1.5);
+  ctx.fillStyle = "#F6EDDC";
   ctx.textAlign = "center";
-  ctx.font = "bold 20px Arial, sans-serif";
-  ctx.fillText("KARTU HARI INI", 905, 102);
+  ctx.font = "bold 20px -apple-system, sans-serif";
+  ctx.fillText("BACAAN 3 KARTU", 540, 270);
+
   centeredText(
     ctx,
-    "Kartuku hari ini.",
-    242,
-    920,
-    "bold 72px Arial, sans-serif",
-    "#302948",
+    "Masa lalu · Masa kini · Masa depan",
+    330,
+    900,
+    "30px -apple-system, sans-serif",
+    "#F6EDDC",
   );
-  centeredText(
-    ctx,
-    "Kocok. Pilih. Buka.",
-    301,
-    920,
-    "28px Arial, sans-serif",
-    "#756f84",
-  );
-  rounded(ctx, 64, 358, 952, 674, 24, "#e8ddfb");
-  const single = ids.length === 1,
-    cardW = single ? 322 : 248,
-    cardH = (cardW * 460) / 280,
-    gap = 34,
-    total = ids.length * cardW + (ids.length - 1) * gap,
-    start = (1080 - total) / 2,
-    top = single ? 380 : 430;
+
+  // Cards Table Altar Inset (Deep Velvet Red #7A1D24)
+  rounded(ctx, 60, 370, 960, 670, 24, "rgba(122, 29, 36, 0.5)", "#E5AB3A", 2);
+
+  const single = ids.length === 1;
+  const cardW = single ? 340 : 256;
+  const cardH = (cardW * 460) / 280;
+  const gap = 38;
+  const total = ids.length * cardW + (ids.length - 1) * gap;
+  const start = (1080 - total) / 2;
+  const top = single ? 420 : 440;
+
   for (let i = 0; i < ids.length; i++) {
-    const x = start + i * (cardW + gap),
-      c = BY_ID[ids[i]];
+    const x = start + i * (cardW + gap);
+    const c = BY_ID[ids[i]];
+    const pos = single
+      ? { name: "Kartumu" }
+      : POSITIONS[i] || { name: `Kartu ${i + 1}` };
+
+    // Position Header Tag
+    ctx.fillStyle = "#E5AB3A";
+    ctx.font = "bold 20px -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(pos.name.toUpperCase(), x + cardW / 2, top - 18);
+
+    // Card Glow & Frame
     ctx.save();
-    ctx.shadowColor = "#51467520";
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetY = 6;
-    rounded(ctx, x - 7, top - 7, cardW + 14, cardH + 14, 18, "#ffffff");
+    ctx.shadowColor = "rgba(229, 171, 58, 0.4)";
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetY = 8;
+    rounded(
+      ctx,
+      x - 5,
+      top - 5,
+      cardW + 10,
+      cardH + 10,
+      14,
+      "#161817",
+      "#E5AB3A",
+      2,
+    );
     ctx.restore();
+
+    // Draw Card Image
     ctx.save();
     ctx.beginPath();
-    ctx.roundRect(x, top, cardW, cardH, 11);
+    ctx.roundRect(x, top, cardW, cardH, 10);
     ctx.clip();
     ctx.drawImage(images[i], x, top, cardW, cardH);
     ctx.restore();
+
+    // Card Title
     ctx.textAlign = "center";
-    ctx.fillStyle = "#302948";
-    ctx.font = `bold ${single ? 34 : 24}px Arial, sans-serif`;
+    ctx.fillStyle = "#F6EDDC";
+    ctx.font = `bold ${single ? 32 : 23}px -apple-system, sans-serif`;
     const names = textLines(ctx, c.name, cardW + 20);
-    names.forEach((name, j) =>
-      ctx.fillText(name, x + cardW / 2, top + cardH + 53 + j * 31),
-    );
-    ctx.fillStyle = "#776a8e";
-    ctx.font = `${single ? 26 : 20}px Arial, sans-serif`;
-    textLines(ctx, c.keywords, cardW + 20).forEach((line, j) =>
+    names.forEach((name, j) => {
+      ctx.fillText(name, x + cardW / 2, top + cardH + 42 + j * 28);
+    });
+
+    // Keywords
+    ctx.fillStyle = "#E5AB3A";
+    ctx.font = `${single ? 24 : 18}px -apple-system, sans-serif`;
+    textLines(ctx, c.keywords, cardW + 20).forEach((line, j) => {
       ctx.fillText(
         line,
         x + cardW / 2,
-        top + cardH + 53 + names.length * 31 + 14 + j * 27,
-      ),
-    );
+        top + cardH + 42 + names.length * 28 + 10 + j * 24,
+      );
+    });
   }
-  rounded(ctx, 64, 1084, 952, 200, 22, "#f7b5cf");
+
+  // Footer banner
+  rounded(
+    ctx,
+    60,
+    1070,
+    960,
+    160,
+    20,
+    "#161817",
+    "rgba(229, 171, 58, 0.6)",
+    1.5,
+  );
   centeredText(
     ctx,
-    "Ini kartuku. Giliran kamu?",
-    1154,
+    "Buka tiga kartumu di The Tarot Room",
+    1125,
     900,
-    "bold 42px Arial, sans-serif",
-    "#302948",
+    "bold 32px -apple-system, sans-serif",
+    "#F6EDDC",
   );
+
   const link = websiteURL();
   const display = link.replace(/^https?:\/\//, "").replace(/\/$/, "");
-  centeredText(
-    ctx,
-    "Main tarot gratis di Sela ✦",
-    1201,
-    900,
-    "27px Arial, sans-serif",
-    "#68578a",
-  );
-  let linkSize = 25;
-  ctx.font = `bold ${linkSize}px Arial, sans-serif`;
-  while (ctx.measureText(display).width > 840 && linkSize > 12) {
+  let linkSize = 24;
+  ctx.font = `bold ${linkSize}px -apple-system, sans-serif`;
+  while (ctx.measureText(display).width > 800 && linkSize > 12) {
     linkSize--;
-    ctx.font = `bold ${linkSize}px Arial, sans-serif`;
+    ctx.font = `bold ${linkSize}px -apple-system, sans-serif`;
   }
-  ctx.fillStyle = "#7458bb";
+  ctx.fillStyle = "#E5AB3A";
   ctx.textAlign = "center";
-  ctx.fillText(display, 540, 1245);
+  ctx.fillText(display, 540, 1175);
+
   centeredText(
     ctx,
-    "Untuk refleksi, bukan kepastian masa depan.",
-    1320,
-    920,
-    "19px Arial, sans-serif",
-    "#8d849a",
+    "Makna kartu adalah refleksi & sudut pandang baru.",
+    1280,
+    900,
+    "18px -apple-system, sans-serif",
+    "rgba(246, 237, 220, 0.65)",
   );
+
   return new Promise((resolve, reject) =>
     canvas.toBlob(
       (blob) =>

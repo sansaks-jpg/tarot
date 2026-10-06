@@ -6,31 +6,42 @@
       name="viewport"
       content="width=device-width,initial-scale=1,viewport-fit=cover"
     />
-    <meta name="theme-color" content="#faf8f5" />
-    <title>Sela — Main tarot, kenali kartumu</title>
+    <meta name="theme-color" content="#161817" />
+    <title>The Tarot Room — Game Tarot Tiga Kartu</title>
     <meta
       name="description"
-      content="Baca tarot dengan panduan berbahasa Indonesia. Pilih satu atau tiga kartu, pahami simbol dan maknanya, lalu tulis catatanmu. Gratis, tanpa login."
+      content="Duduk, pilih pertanyaan, dan buka tiga kartu bersama Sela. Game tarot berbahasa Indonesia, gratis dan tanpa login."
     />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Sela — Main tarot, kenali kartumu" />
+    <meta
+      property="og:title"
+      content="The Tarot Room — Game Tarot Tiga Kartu"
+    />
     <meta
       property="og:description"
-      content="Pilih mode, kocok kartu, dan buka maknanya. Tarot untuk pemula dengan ilustrasi berwarna, animasi, dan suara. Tanpa login."
+      content="Pilih pertanyaan, ambil tiga kartu, dan dengarkan bacaan Sela. Koleksi 78 kartu bisa kamu lihat terpisah."
     />
     <meta property="og:image" content="/assets/social.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/styles.css" />
-    <link rel="preload" href="/assets/cards/m17.svg" as="image" />
-    <script type="module" src="/app.js"></script>
+    <link rel="alternate icon" href="/assets/favicon.png" type="image/png" />
+    <link rel="stylesheet" href="/styles.css?v=room-4" />
+    <link rel="preload" href="/assets/cards/back.svg?v=room-4" as="image" />
+    <link rel="preload" href="/assets/brand.webp" as="image" />
+    <link
+      rel="preload"
+      href="/assets/presence-mobile.webp"
+      as="image"
+      media="(max-width: 699px)"
+    />
+    <script type="module" src="/app.js?v=room-4"></script>
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "WebApplication",
-        "name": "Sela",
-        "description": "Panduan tarot berbahasa Indonesia untuk pemula, dengan 78 kartu dan catatan pribadi.",
-        "applicationCategory": "LifestyleApplication",
+        "name": "The Tarot Room",
+        "description": "Game tarot tiga kartu berbahasa Indonesia dengan pembaca virtual.",
+        "applicationCategory": "GameApplication",
         "operatingSystem": "Any",
         "inLanguage": "id",
         "isAccessibleForFree": true,
@@ -41,21 +52,23 @@
   <body>
     <a class="skip-link" href="#main">Langsung ke isi</a>
     <header class="site-header">
-      <a class="wordmark" href="#beranda" aria-label="Sela, beranda"
-        ><span class="brand-star" aria-hidden="true">✦</span>sela<span
-          class="brand-tag"
-          >TAROT</span
-        ></a
+      <a
+        class="wordmark"
+        href="#bacaan"
+        data-reading-link
+        aria-label="The Tarot Room, baca tarot"
       >
+        <img
+          src="/assets/brand.webp"
+          alt="The Tarot Room"
+          class="brand-logo"
+          width="160"
+          height="88"
+          fetchpriority="high"
+        />
+      </a>
       <div class="header-tools">
-        <button
-          class="icon-button"
-          type="button"
-          data-action="guide"
-          aria-label="Cara bermain"
-        >
-          ?
-        </button>
+        <a class="room-switcher" id="roomSwitcher" href="#kartu">Lihat kartu</a>
         <div class="sound-control">
           <button
             class="icon-button sound-toggle"
@@ -94,45 +107,20 @@
               value="100"
               aria-label="Volume musik dan efek suara"
             />
-            <p>Musik & efek kartu. Bisa dimatikan kapan saja.</p>
+            <p>Musik, efek kartu, dan suara pembaca.</p>
           </div>
         </div>
       </div>
     </header>
     <main id="main" tabindex="-1"></main>
-    <nav class="app-nav" aria-label="Navigasi utama">
-      <a href="#beranda" data-nav="beranda"
-        ><svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="m3 11 9-8 9 8M5 9v12h5v-7h4v7h5V9" /></svg
-        ><span>Beranda</span></a
-      >
-      <a href="#bacaan" data-nav="bacaan"
-        ><svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="6" y="3" width="12" height="18" rx="3" />
-          <path d="m12 7 3 5-3 5-3-5z" /></svg
-        ><span>Main</span></a
-      >
-      <a href="#kartu" data-nav="kartu"
-        ><svg viewBox="0 0 24 24" aria-hidden="true">
-          <path
-            d="M12 5v15M12 6C8 3 4 4 3 5v15c3-2 6-2 9 0 3-2 6-2 9 0V5c-1-1-5-2-9 1"
-          /></svg
-        ><span>Koleksi</span></a
-      >
-      <a href="#catatan" data-nav="catatan"
-        ><svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M7 3h13v18H7zM4 7h6M4 12h6M4 17h6M12 8h5M12 12h5" /></svg
-        ><span>Jurnal</span></a
-      >
-    </nav>
     <dialog id="modal" aria-labelledby="modalTitle">
       <div id="modalBody"></div>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <noscript
-      ><div class="noscript">
-        Aktifkan JavaScript untuk memilih kartu dan membaca maknanya.
-      </div></noscript
-    >
+    <noscript>
+      <div class="noscript">
+        Aktifkan JavaScript untuk memasuki The Tarot Room dan membaca kartumu.
+      </div>
+    </noscript>
   </body>
 </html>

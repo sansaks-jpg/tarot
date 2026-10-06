@@ -7,7 +7,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "check": "node scripts/check.mjs && node scripts/ui-check.mjs",
+    "check": "node scripts/check.mjs && node scripts/ui-check.mjs && node scripts/narrator-check.mjs && node scripts/server-check.mjs",
+    "serve": "node scripts/serve.mjs",
     "build": "npm run check && node scripts/build.mjs"
   }
 }

@@ -1,133 +1,57 @@
-# Tarot — Sela
+# The Tarot Room
 
-Website tarot berbahasa Indonesia: 78 kartu, bacaan 1 atau 3 kartu, pembaca
-bergaya visual novel dengan bubble chat, jurnal lokal, ekspor, share gambar PNG,
-animasi kartu, musik, dan efek suara. UI mobile memakai layar yang ringkas, tombol
-lanjut selalu terlihat, serta koleksi dan jurnal dengan pagination.
+Game tarot tiga kartu untuk HP dan desktop. Pengunjung memilih topik dan pertanyaan, mengambil tiga kartu, lalu mendengarkan Sela membacakan satu per satu. Tanpa akun. Game langsung membuka pilihan pertanyaan; tersedia koleksi kartu terpisah, tanpa beranda, riwayat, atau jurnal.
 
-Narasi suara satu arah memakai Gemini 3.8 Live melalui Cloudflare Pages Functions.
-Tanpa API key, seluruh alur tarot, teks bubble, musik, dan share tetap berjalan.
-Tidak memakai database, login, atau mikrofon.
+## Lokal
 
-## Cloudflare Pages dari GitHub
+`npm run build` menyiapkan `dist`. `npm run serve` menyajikan game dan endpoint Gemini pada satu server di port 8080, terikat ke `0.0.0.0`. Bila server sudah berjalan, build saja; jangan menjalankan server kedua.
 
-Di Cloudflare, buat **Pages project → Connect to Git**, lalu pilih repo `tarot`.
-Untuk repo private, beri integrasi Cloudflare akses ke repo ini.
+Buka `http://localhost:8080`. Di HP pada Wi-Fi yang sama, gunakan alamat LAN komputer dan port 8080. Alamat yang terdeteksi dicetak saat server mulai.
 
-| Pengaturan             | Nilai              |
-| ---------------------- | ------------------ |
-| Production branch      | `main`             |
-| Framework preset       | `None`             |
-| Build command          | `npm run build`    |
-| Build output directory | `dist`             |
-| Root directory         | kosong (root repo) |
-| Environment variable   | `NODE_VERSION=22`  |
+Salin `.env.example` ke `.env` hanya jika `.env` belum ada. Pertahankan key yang sudah diisi:
 
-Push ke `main` akan memicu deployment otomatis setelah integrasi terhubung.
-Ini konfigurasi **Cloudflare Pages**, bukan Workers. Tidak perlu deploy command.
-
-Opsional: set `SITE_URL=https://domain-kamu.com` untuk canonical URL, Open Graph,
-dan sitemap, lalu redeploy. Tanpa `SITE_URL`, build memakai `CF_PAGES_URL` yang
-disediakan Cloudflare. Untuk preview deployment, jangan set `SITE_URL` production
-jika ingin metadata menunjuk ke URL preview. Build lokal tanpa kedua variabel
-tersebut tetap berjalan, tanpa canonical dan sitemap. Domain hosting lama sudah
-dihapus dari source.
-
-Routing memakai hash (`#bacaan`, `#kamus`, dan lainnya), sehingga tidak memerlukan
-rewrite atau server routing. `_headers` menambahkan header dasar untuk Pages.
-
-## Lokal dan pemeriksaan
-
-Gunakan Node.js 22 atau lebih baru. Tidak ada dependency npm untuk aplikasi.
-
-```bash
-npm run build
-python3 -m http.server 8080 --directory dist
+```dotenv
+GEMINI_API_KEY=key_kamu
+GEMINI_LIVE_MODEL=gemini-3.8-live
+GEMINI_LIVE_VOICE=Aoede
+SITE_URL=http://localhost:8080
 ```
 
-Buka http://localhost:8080. Jalankan `npm run check` untuk memeriksa 78 kartu,
-aset, syntax JavaScript, alur bacaan, penyimpanan/ekspor, validasi input, dan
-template antarmuka. Pemeriksaan template menggunakan adapter DOM; bukan browser.
+`.env` tidak ikut Git atau hasil build. Server membaca konfigurasi setiap permintaan API, sehingga mengisi/mengganti key tidak memerlukan restart. Perubahan kode server/Functions memerlukan satu muat ulang proses server.
 
-## Struktur
+## Cloudflare Pages
 
-- `public/`: source website dan aset statis yang diedit langsung.
-- `scripts/build.mjs`: menyalin source ke `dist/` dan menyiapkan metadata domain.
-- `scripts/check.mjs`, `scripts/ui-check.mjs`: pemeriksaan aplikasi.
-- `functions/api/`: konfigurasi narasi dan token sementara Gemini Live.
-- `public/narrator.js`: pemutar streaming PCM satu arah tanpa mikrofon.
-- `public/share.js`: gambar share 1080 × 1350 yang dibuat di browser.
-- `scripts/card-art.py`: generator ilustrasi kartu, tanpa dependency Python tambahan.
-- `dist/`: hasil build, tidak disimpan di Git.
+Build command: `npm run build`. Output directory: `dist`. Root `functions/api` menyediakan `/api/config` dan `/api/live-token`.
 
-Untuk menggambar ulang kartu: `python3 scripts/card-art.py`, kemudian build lagi.
-Gambar sosial sudah tersedia di `public/assets/social.png`.
+Pakai nama variabel yang sama pada konfigurasi Pages:
 
-## Gemini 3.8 Live: environment Cloudflare
-
-Buka project **Pages → Settings → Variables and Secrets**. Isi untuk environment
-Production (dan Preview bila ingin menguji narasi di preview):
-
-| Nama                  | Jenis              | Nilai                                                                  |
-| --------------------- | ------------------ | ---------------------------------------------------------------------- |
-| `GEMINI_API_KEY`      | Secret (encrypted) | API key dari Google AI Studio yang memiliki akses Live API             |
-| `GEMINI_LIVE_MODEL`   | Variable           | `gemini-3.8-live` (default bila kosong)                                |
-| `GEMINI_LIVE_VOICE`   | Variable           | `Aoede` (default; bisa diganti voice Gemini Live yang didukung)        |
-| `GEMINI_LIVE_ENABLED` | Variable, opsional | `false` untuk menonaktifkan narasi; selain itu aktif bila key tersedia |
-| `SITE_URL`            | Variable, opsional | URL production, misalnya `https://tarot.example.com`                   |
-
-**Redeploy setelah mengatur environment.** Gunakan key sebagai runtime secret
-Pages Functions, bukan variable publik atau kode JavaScript. Folder `functions/`
-berada di root repo; Cloudflare membundlenya otomatis. `_routes.json` membatasi
-pemanggilan Function pada `/api/*`, sehingga file statis tetap dilayani sebagai aset.
-
-Alur narasi: browser meminta token ke `POST /api/live-token` → Function memakai
-API key server untuk membuat token sekali pakai → browser membuka WebSocket Live
-API dengan token sementara → Gemini mengembalikan audio PCM. Token dikunci ke
-model, voice, instruksi membaca, dan batas output; berlaku 5 menit, dengan 1 menit
-untuk membuka sesi. API key utama tidak pernah dikirim ke browser.
-
-Sela membacakan teks bubble dalam bahasa Indonesia dengan gaya bercerita. Teks
-kartu tetap menjadi acuan; model diminta membacakan tanpa menambah tafsir. Saat
-pindah bubble/tab, menutup layar, mematikan suara, atau menyembunyikan tab,
-audio lama dihentikan. Musik mengecil otomatis saat narasi berjalan. Suara default nyala dan volume awal
-100% untuk musik/SFX/narasi; slider manual mengatur semuanya. Tombol ♪ di sebelah
-nama Sela bisa mematikan narasi saja. Autoplay dicoba saat halaman dibuka. Bila kebijakan browser menahan audio, suara
-langsung aktif pada sentuhan pertama di mana pun tanpa tombol unmute.
-
-Jika key, model, kuota, jaringan, atau WebSocket bermasalah, cerita teks tetap
-berjalan dan status kegagalan muncul pada bubble. Tidak ada permintaan mikrofon.
-Hanya nama kartu dan teks publik yang sedang dibaca dikirim ke Gemini, bukan
-pertanyaan atau catatan pribadi. API Gemini mengikuti billing/kuota akun Google.
-Endpoint token memakai pengecekan same-origin. Untuk situs publik, atur rate limit
-Cloudflare pada `/api/live-token` sesuai anggaran akun; same-origin bukan autentikasi.
-
-Referensi resmi:
-[Gemini 3.8 Live](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-live),
-[ephemeral tokens](https://ai.google.dev/gemini-api/docs/live-api/ephemeral-tokens),
-[WebSocket reference](https://ai.google.dev/api/live).
-
-Untuk dev lokal dengan Pages Functions:
-
-```bash
-npm run build
-npx wrangler pages dev dist
+```dotenv
+GEMINI_API_KEY=key_kamu
+GEMINI_LIVE_MODEL=gemini-3.8-live
+GEMINI_LIVE_VOICE=Aoede
+SITE_URL=https://domain-kamu
 ```
 
-Simpan key lokal dalam `.dev.vars` (diabaikan Git), misalnya dengan nama variable
-`GEMINI_API_KEY`. Jangan commit nilainya. Server Python hanya melayani file statis
-untuk melihat UI; narasi memerlukan Pages Functions.
+Simpan `GEMINI_API_KEY` sebagai secret. `SITE_URL` merupakan alamat publik untuk canonical dan sitemap; tetapkan juga pada environment build Pages. Jangan memasukkan key ke kode browser atau `public`.
 
-## Share & penyimpanan
+## Suara
 
-Share hasil membuat gambar berisi 1 atau 3 kartu, kata kunci, serta ajakan bermain
-melalui URL website. Pertanyaan dan catatan pribadi tidak masuk gambar. Di browser
-yang mendukung Web Share file, tombol **Bagikan** membuka menu share perangkat;
-di browser lain gambar diunduh sebagai PNG. Tombol **Simpan PNG** dan **Salin link**
-tersedia juga. URL memakai `SITE_URL`/canonical jika tersedia, atau domain saat ini.
-Web Share memerlukan HTTPS (localhost bisa untuk pengujian).
+Browser meminta token sementara ke server, lalu tersambung langsung ke Gemini Live. REST token memakai `bidiGenerateContentSetup` untuk mengunci model, voice dan instruksi. Konfigurasi `liveConnectConstraints` adalah bentuk SDK, bukan field REST yang diterima endpoint saat pemeriksaan ini.
 
-Pertanyaan dan catatan diproses di perangkat pengunjung. Catatan tersimpan di
-localStorage browser tersebut, tidak disinkronkan antarperangkat atau domain.
-Pengunjung yang berpindah dari domain lama perlu mengekspor catatannya sendiri.
-Tarot disajikan sebagai bahan refleksi.
+Satu koneksi dipakai sepanjang sesi. Bacaan pertama disiapkan saat tiga kartu sudah dipilih; bagian berikutnya disiapkan saat bagian saat ini berbicara. PCM dimainkan per potongan dengan penyangga 35 ms, tanpa menunggu satu respons selesai. Latensi layanan/jaringan tetap dapat terjadi. Suara hanya Gemini; jika layanan gagal, pesan di game meminta pemain melanjutkan dengan teks.
+
+Pertanyaan pribadi tidak dikirim ke Gemini. Hanya nama kartu dan teks bacaan yang dikirim. Suara dimulai setelah sentuhan pemain. Musik memakai berkas ambient dengan loop, efek memakai rekaman kartu; musik mengecil saat Sela berbicara. Tombol volume mengatur musik, efek dan narasi.
+
+Layar pemilihan dan bacaan mengikuti tinggi viewport HP. Teks narasi dibagi menjadi bagian pendek; bagian berikutnya muncul setelah suara selesai, dan pemain membuka setiap kartu sendiri. Kartu yang terbuka dapat disentuh untuk melihat detail. Koleksi kartu memakai halaman terpisah.
+
+## Aset
+
+78 kartu Rider–Waite–Smith dari [TarotCards — mixvlad](https://github.com/mixvlad/TarotCards/tree/main/tarot/rider-waite), dipilih karena gambar dan simbol cocok dengan isi deck. Gambar 400 px dan thumbnail 240 px dikompresi WebP. Foto asli dan SVG lama tetap tersimpan di sumber, tetapi tidak disalin ke build.
+
+Foto ruang/pembaca merupakan aset generatif. Palette dan logo mengikuti referensi pemilik. Sumber, lisensi, perubahan ukuran, dan catatan pembuatan ada di [docs/asset-notes.md](docs/asset-notes.md). Musik dan efek dimuat setelah interaksi; koleksi kartu dimuat bertahap.
+
+## Pemeriksaan
+
+`npm run check` memeriksa data 78 kartu, batas tiga kartu, simpan/ekspor, input HTML, template layar, konfigurasi Cloudflare, penjadwalan PCM/koneksi/cache Gemini, dan streaming byte-range lokal. Pemeriksaan server memanggil handler langsung tanpa menyalakan server tambahan atau membaca `.env`.
+
+`npm run build` menjalankan pemeriksaan sebelum menyalin hasil. Browser tetap diperlukan untuk memeriksa animasi, tata letak, kebijakan autoplay, dan suara nyata.

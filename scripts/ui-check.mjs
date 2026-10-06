@@ -20,6 +20,8 @@ assert.equal(nextChapter("makna"), "langkah");
 assert.equal(nextChapter("refleksi"), null);
 const nodes = new Map();
 const doc = {
+  body: {dataset:{}},
+  querySelector() { return null; },
   getElementById(id) {
     if (!nodes.has(id))
       nodes.set(id, {
@@ -45,6 +47,10 @@ const context = vm.createContext({
   console,
   setTimeout,
   clearTimeout,
+  narrator: {prefetch(){},stop(){}},
+  location: {hash:''},
+  window: {scrollTo(){}},
+  requestAnimationFrame(){},
 });
 const source = await fs.readFile(
   new URL("../public/app.js", import.meta.url),
@@ -56,6 +62,10 @@ vm.runInContext(
     .replace(/^import[\s\S]*?;\s*/gm, ""),
   context,
 );
+vm.runInContext('render({focus:false})',context);
+assert.equal(doc.body.dataset.screen,'bacaan');
+assert.match(nodes.get('main').innerHTML,/Pilih pertanyaanmu/);
+assert.doesNotMatch(nodes.get('main').innerHTML,/Beranda|Riwayat|Simpan catatan/);
 vm.runInContext(
   "state.reading=newReading('umum','Rahasia pribadi <script>',3)",
   context,
@@ -66,7 +76,13 @@ assert.equal(
   7,
 );
 for (const id of r.candidates.slice(0, 3)) engine.chooseCard(r, id);
-assert.match(vm.runInContext("pick()", context), /Siap dibuka/);
+const readyPick = vm.runInContext("pick()", context);
+assert.match(readyPick, /3 \/ 3/);
+assert.ok(
+  !readyPick
+    .match(/<button[^>]*data-action="start-reading"[^>]*>/)[0]
+    .includes("disabled"),
+);
 assert.match(vm.runInContext("reader()", context), /Buka kartu ini/);
 engine.revealCard(r);
 assert.match(vm.runInContext("reader()", context), /dialogue-bubble/);
@@ -76,7 +92,10 @@ for (let i = 0; i < 3; i++) {
 }
 assert.equal(engine.readingComplete(r), true);
 const summary = vm.runInContext("summary()", context);
-assert.match(summary, /data-action="share"/);
+assert.match(summary, /data-action="new"/);
+assert.match(summary, /data-action="read-again"/);
+assert.doesNotMatch(summary, /data-action="share"|write-note|Simpan catatan/);
+assert.equal((summary.match(/class="result-card"/g)||[]).length,3);
 assert.match(summary, /&lt;script&gt;/);
 assert.doesNotMatch(summary, /<script>/);
 assert.equal(
@@ -145,5 +164,5 @@ try {
   globalThis.fetch = originalFetch;
 }
 console.log(
-  "PASS: complete story text, seven-card choice, visual novel templates, escaped input, result sharing, and Cloudflare ephemeral-token configuration/error handling.",
+  "PASS: direct reading entry, seven-card choice, three-card completion without history UI, escaped input, complete story text, and Cloudflare REST token configuration/error handling.",
 );

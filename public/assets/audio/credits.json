@@ -1,0 +1,16 @@
+{
+  "music": {
+    "title": "Ancient Mysteries",
+    "author": "Sperry Lion, LLC (2024)",
+    "source": "https://opengameart.org/content/ancient-mysteries",
+    "license": "CC0",
+    "changes": "Loop version; normalized and encoded as 80 kbps AAC in M4A"
+  },
+  "effects": {
+    "title": "Casino Audio",
+    "author": "Kenney",
+    "source": "https://kenney.nl/assets/casino-audio",
+    "license": "CC0",
+    "changes": "card-shuffle, card-fan-2, card-slide-3, card-place-2, card-shove-2; normalized and encoded as mono 80 kbps MP3"
+  }
+}

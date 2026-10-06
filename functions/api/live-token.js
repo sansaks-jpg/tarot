@@ -23,7 +23,7 @@ export async function onRequestPost({ request, env }) {
     model: `models/${model}`,
     generationConfig: {
       responseModalities: ["AUDIO"],
-      maxOutputTokens: 512,
+      maxOutputTokens: 1024,
       speechConfig: {
         voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
       },
@@ -31,7 +31,7 @@ export async function onRequestPost({ request, env }) {
     systemInstruction: {
       parts: [
         {
-          text: "Kamu adalah Sela, narator visual novel tarot berbahasa Indonesia. Ini narasi satu arah, bukan percakapan. Bacakan hanya teks dalam bidang passage dari JSON pengguna, kata demi kata tanpa tambahan, tanpa sapaan atau pertanyaan baru. Jangan bacakan nama bidang JSON atau judul kartu. Gunakan suara hangat, lembut, ekspresif, dengan jeda alami seperti teman yang bercerita. Nama kartu hanya konteks. Jangan meramal, menambah tafsir, atau meminta jawaban. Setelah selesai, berhenti.",
+          text: "Kamu adalah Sela, pembaca virtual dalam game The Tarot Room. Bacakan hanya teks dalam bidang passage dari JSON pengguna, kata demi kata. Jangan bacakan nama bidang atau judul kartu. Suaramu hangat, jelas, dan santai seperti sedang membaca di seberang meja. Gunakan bahasa Indonesia, tempo percakapan normal, tanpa jeda panjang. Jangan menambah sapaan, tafsir, pertanyaan baru, atau kalimat penutup. Setelah satu teks selesai, berhenti dan tunggu teks berikutnya.",
         },
       ],
     },
@@ -48,7 +48,8 @@ export async function onRequestPost({ request, env }) {
         body: JSON.stringify({
           uses: 1,
           newSessionExpireTime: new Date(Date.now() + 60000).toISOString(),
-          expireTime: new Date(Date.now() + 300000).toISOString(),
+          expireTime: new Date(Date.now() + 900000).toISOString(),
+          // REST uses the wire setup, not the SDK's liveConnectConstraints shape.
           bidiGenerateContentSetup: setup,
         }),
         signal: AbortSignal.timeout(12000),

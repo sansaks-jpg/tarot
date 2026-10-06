@@ -1,70 +1,325 @@
-import { audioVolume, audioEnabled, duckMusic } from "./audio.js";
+import {
+  audioVolume,
+  audioEnabled,
+  duckMusic,
+  getAudioContext,
+} from "./audio.js?v=room-4";
 
-// One-way Gemini Live native audio. No microphone, no personal question or notes.
-class LiveNarrator {
+// One Live connection per reading. Generation and playback have separate lifetimes:
+// changing a passage clears playback while an in-flight response drains to cache.
+export class LiveNarrator {
   constructor() {
     this.ctx = null;
     this.gain = null;
     this.sources = new Set();
     this.job = 0;
+    this.mode = "none";
     this.socket = null;
-    this.abort = null;
-    this.timer = null;
-    this.scheduled = 0;
+    this.ready = null;
+    this.isReady = false;
+    this.active = null;
+    this.queue = [];
     this.cache = new Map();
+    this.playing = null;
+    this.scheduled = 0;
+    this.timer = null;
+    this.idleTimer = null;
+    this.abort = null;
+    this.metrics = { connections: 0, firstAudioMs: null };
   }
+
+  configure(config = {}) {
+    this.mode = config.narration ? "gemini" : "none";
+  }
+
   unlock() {
     try {
       if (!this.ctx) {
-        const Audio = globalThis.AudioContext || globalThis.webkitAudioContext;
-        if (!Audio) return;
-        this.ctx = new Audio();
+        this.ctx = getAudioContext();
+        if (!this.ctx) return;
         this.gain = this.ctx.createGain();
-        this.gain.connect(this.ctx.destination);
+        const limiter = this.ctx.createDynamicsCompressor();
+        limiter.threshold.value = -10;
+        limiter.ratio.value = 6;
+        this.gain.connect(limiter);
+        limiter.connect(this.ctx.destination);
       }
-      this.gain.gain.value = audioEnabled() ? audioVolume() / 100 : 0;
+      this.volume();
       this.ctx.resume().catch(() => {});
     } catch {}
   }
+
   volume() {
-    if (this.ctx)
+    if (this.ctx && this.gain)
       this.gain.gain.setTargetAtTime(
         audioEnabled() ? audioVolume() / 100 : 0,
         this.ctx.currentTime,
-        0.04,
+        0.03,
       );
   }
-  stop() {
+
+  stop({ disconnect = false } = {}) {
     this.job++;
     clearTimeout(this.timer);
-    this.abort?.abort();
-    this.abort = null;
-    if (this.socket) {
-      this.socket.close();
-      this.socket = null;
-    }
+    this.playing = null;
+
     for (const source of this.sources) {
       try {
         source.stop();
+        source.disconnect();
       } catch {}
-      source.disconnect();
     }
     this.sources.clear();
     this.scheduled = this.ctx?.currentTime || 0;
     duckMusic(false);
+    if (disconnect) this.disconnect();
   }
+
+  disconnect() {
+    clearTimeout(this.idleTimer);
+    this.abort?.abort();
+    this.abort = null;
+    const socket = this.socket;
+    this.socket = null;
+    this.isReady = false;
+    this.ready = null;
+    this.rejectPending(new Error("Sesi suara berakhir."));
+    if (socket) {
+      socket.onclose = null;
+      socket.onerror = null;
+      try {
+        socket.close();
+      } catch {}
+    }
+  }
+
+  rejectPending(error) {
+    for (const entry of [this.active, ...this.queue].filter(Boolean)) {
+      clearTimeout(entry.timeout);
+      this.cache.delete(entry.key);
+      entry.reject(error);
+    }
+    this.active = null;
+    this.queue = [];
+  }
+
+  async connect() {
+    clearTimeout(this.idleTimer);
+    if (this.isReady && this.socket?.readyState === 1) return;
+    if (this.ready) return this.ready;
+    const controller = new AbortController();
+    this.abort = controller;
+    this.ready = (async () => {
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      let data;
+      try {
+        const response = await fetch("/api/live-token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("Suara Gemini belum tersedia.");
+        data = await response.json();
+        if (typeof data.token !== "string" || !data.setup?.model)
+          throw new Error("Token suara tidak valid.");
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (controller.signal.aborted) throw new Error("Sesi suara dibatalkan.");
+      return new Promise((resolve, reject) => {
+        const socket = new WebSocket(
+          "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=" +
+            encodeURIComponent(data.token),
+        );
+        this.socket = socket;
+        this.metrics.connections++;
+        const handshake = setTimeout(() => {
+          reject(new Error("Suara belum tersambung."));
+          this.disconnect();
+        }, 8000);
+        const fail = () => {
+          if (this.socket !== socket) return;
+          clearTimeout(handshake);
+          const error = new Error("Koneksi suara terputus.");
+          reject(error);
+          this.socket = null;
+          this.isReady = false;
+          this.ready = null;
+          this.rejectPending(error);
+          try {
+            socket.close();
+          } catch {}
+        };
+        socket.onopen = () => {
+          if (this.socket === socket)
+            socket.send(JSON.stringify({ setup: data.setup }));
+        };
+        // Chain decoding so Blob conversion cannot reorder PCM chunks.
+        let messages = Promise.resolve();
+        socket.onmessage = (event) => {
+          messages = messages
+            .then(async () => {
+              if (this.socket !== socket) return;
+              const raw =
+                event.data instanceof Blob
+                  ? await event.data.text()
+                  : event.data;
+              if (this.socket !== socket) return;
+              const message = JSON.parse(raw);
+              if (message.error) {
+                fail();
+                return;
+              }
+              if (message.setupComplete) {
+                clearTimeout(handshake);
+                this.isReady = true;
+                resolve();
+                this.pump();
+                return;
+              }
+              const content = message.serverContent;
+              const entry = this.active;
+              if (content && entry) {
+                if (content.interrupted) {
+                  entry.reject(new Error("Bacaan suara terhenti."));
+                  this.cache.delete(entry.key);
+                }
+                for (const part of content.modelTurn?.parts || []) {
+                  const chunk = part.inlineData;
+                  if (!chunk?.mimeType?.startsWith("audio/pcm")) continue;
+                  entry.chunks.push(chunk);
+                  // Stream immediately. Only the current passage is ever audible.
+                  if (this.playing?.entry === entry) this.playAvailable();
+                }
+                if (content.turnComplete) {
+                  clearTimeout(entry.timeout);
+                  entry.complete = true;
+                  this.active = null;
+                  if (entry.chunks.length) entry.resolve(entry);
+                  else {
+                    this.cache.delete(entry.key);
+                    entry.reject(new Error("Bacaan tidak berisi audio."));
+                  }
+                  if (this.playing?.entry === entry) this.finishWhenPlayed();
+                  this.trimCache();
+                  this.pump();
+                }
+              }
+              if (message.goAway && !this.active) this.disconnect();
+            })
+            .catch(fail);
+        };
+        socket.onerror = fail;
+        socket.onclose = fail;
+      });
+    })();
+    try {
+      await this.ready;
+    } catch (error) {
+      this.ready = null;
+      throw error;
+    }
+  }
+
+  prefetch() {
+    if (this.mode !== "gemini" || !audioEnabled()) return Promise.resolve();
+    return this.connect().catch(() => {});
+  }
+
+  request(passage, card, priority = false) {
+    const key = card + "|" + passage;
+    let entry = this.cache.get(key);
+    if (!entry) {
+      entry = { key, passage, card, chunks: [], complete: false };
+      entry.promise = new Promise((resolve, reject) => {
+        entry.resolve = resolve;
+        entry.reject = reject;
+      });
+      entry.promise.catch(() => {});
+      this.cache.set(key, entry);
+      this.queue.push(entry);
+    }
+    if (priority && this.queue.includes(entry)) {
+      this.queue = [entry, ...this.queue.filter((item) => item !== entry)];
+    }
+    if (entry.complete) return entry;
+    this.connect()
+      .then(() => this.pump())
+      .catch((error) => {
+        this.rejectPending(error);
+      });
+    return entry;
+  }
+
+  prepare(passage, card) {
+    if (this.mode !== "gemini" || !audioEnabled() || !passage) return;
+    this.request(passage, card).promise.catch(() => {});
+  }
+
+  pump() {
+    if (!this.isReady || this.active || this.socket?.readyState !== 1) return;
+    const entry = this.queue.shift();
+    if (!entry) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = setTimeout(() => this.disconnect(), 60000);
+      return;
+    }
+    clearTimeout(this.idleTimer);
+    this.active = entry;
+    entry.timeout = setTimeout(() => {
+      const error = new Error("Suara belum diterima.");
+      entry.reject(error);
+      this.disconnect();
+    }, 30000);
+    this.socket.send(
+      JSON.stringify({
+        clientContent: {
+          turns: [
+            {
+              role: "user",
+              parts: [
+                {
+                  text: JSON.stringify({
+                    card: entry.card,
+                    passage: entry.passage,
+                  }),
+                },
+              ],
+            },
+          ],
+          turnComplete: true,
+        },
+      }),
+    );
+  }
+
+  trimCache() {
+    // Bound memory to ~12 MB of base64 PCM, and retain the currently played entry.
+    let bytes = [...this.cache.values()].reduce(
+      (sum, e) => sum + e.chunks.reduce((n, c) => n + c.data.length, 0),
+      0,
+    );
+    for (const [key, entry] of this.cache) {
+      if (this.cache.size <= 8 && bytes <= 12 * 1024 * 1024) break;
+      if (!entry.complete || entry === this.playing?.entry) continue;
+      bytes -= entry.chunks.reduce((n, c) => n + c.data.length, 0);
+      this.cache.delete(key);
+    }
+  }
+
   play(chunk) {
-    const binary = atob(chunk.data),
-      view = new DataView(new ArrayBuffer(binary.length));
-    for (let i = 0; i < binary.length; i++)
-      view.setUint8(i, binary.charCodeAt(i));
-    const rate = Number(/rate=(\d+)/.exec(chunk.mimeType || "")?.[1] || 24000),
-      length = Math.floor(binary.length / 2);
-    if (!length || rate < 8000 || rate > 48000) return;
-    const buffer = this.ctx.createBuffer(1, length, rate),
-      data = buffer.getChannelData(0);
-    for (let i = 0; i < length; i++)
-      data[i] = view.getInt16(i * 2, true) / 32768;
+    if (!this.ctx || !this.gain || this.ctx.state !== "running") return false;
+    const binary = atob(chunk.data);
+    const rate = Number(/rate=(\d+)/.exec(chunk.mimeType || "")?.[1] || 24000);
+    if (!binary.length || binary.length % 2 || rate < 8000 || rate > 48000)
+      return false;
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    const pcm = new DataView(bytes.buffer);
+    const buffer = this.ctx.createBuffer(1, binary.length / 2, rate);
+    const samples = buffer.getChannelData(0);
+    for (let i = 0; i < samples.length; i++)
+      samples[i] = pcm.getInt16(i * 2, true) / 32768;
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(this.gain);
@@ -73,144 +328,87 @@ class LiveNarrator {
       this.sources.delete(source);
       source.disconnect();
     };
+    // A short safety margin absorbs network jitter without waiting for the full turn.
     this.scheduled = Math.max(this.scheduled, this.ctx.currentTime + 0.035);
     source.start(this.scheduled);
     this.scheduled += buffer.duration;
+    return true;
   }
-  async speak(passage, card, status = () => {}) {
+
+  playAvailable() {
+    const playing = this.playing;
+    if (!playing || playing.job !== this.job) return;
+    while (playing.index < playing.entry.chunks.length) {
+      if (!this.play(playing.entry.chunks[playing.index])) break;
+      playing.index++;
+      if (playing.index === 1) {
+        this.metrics.firstAudioMs = Math.round(
+          performance.now() - playing.startedAt,
+        );
+        playing.status("Sela sedang membaca · Gemini", true);
+        duckMusic(true);
+      }
+    }
+    this.finishWhenPlayed();
+  }
+
+  finishWhenPlayed() {
+    const playing = this.playing;
+    if (
+      !playing?.entry.complete ||
+      playing.index !== playing.entry.chunks.length
+    )
+      return;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(
+      () => {
+        if (this.playing !== playing || playing.job !== this.job) return;
+        this.playing = null;
+        duckMusic(false);
+        playing.status("", false);
+        playing.done();
+      },
+      Math.max(0, (this.scheduled - this.ctx.currentTime) * 1000) + 80,
+    );
+  }
+
+  async speak(passage, card, status = () => {}, done = () => {}) {
     this.stop();
-    this.unlock();
-    if (!this.ctx) return;
     const job = this.job;
-    this.volume();
-    status("Menyiapkan suara Sela…");
-    const key = card + "|" + passage,
-      cached = this.cache.get(key);
-    const finish = () => {
-      clearTimeout(this.timer);
-      this.timer = setTimeout(
-        () => {
-          if (job === this.job) {
-            duckMusic(false);
-            status("");
-          }
-        },
-        Math.max(0, (this.scheduled - this.ctx.currentTime) * 1000) + 80,
-      );
+    if (!audioEnabled() || this.mode === "none") return;
+    this.unlock();
+
+    status("Menyiapkan suara…", false);
+    const entry = this.request(passage, card, true);
+    this.playing = {
+      entry,
+      job,
+      index: 0,
+      status,
+      done,
+      startedAt: performance.now(),
     };
-    if (cached) {
-      duckMusic(true);
-      status("Sela bercerita…");
-      for (const chunk of cached) this.play(chunk);
-      finish();
+    if (this.ctx?.state !== "running") {
+      try {
+        await this.ctx?.resume();
+      } catch {}
+    }
+    if (job !== this.job) return;
+    if (!this.ctx || this.ctx.state !== "running") {
+      status("Ketuk tombol lanjut untuk mengaktifkan suara.", false);
       return;
     }
-    this.abort = new AbortController();
-    const abort = this.abort;
-    try {
-      const response = await fetch("/api/live-token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-        signal: abort.signal,
-      });
-      if (!response.ok) throw new Error("Narasi tidak tersedia");
-      const { token, setup } = await response.json();
+    this.playAvailable();
+    entry.promise.catch(() => {
       if (job !== this.job) return;
-      return await new Promise((resolve, reject) => {
-        const socket = new WebSocket(
-          "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=" +
-            encodeURIComponent(token),
-        );
-        this.socket = socket;
-        const chunks = [];
-        let complete = false;
-        let started = false;
-        const fail = () => {
-          if (job !== this.job) {
-            resolve();
-            return;
-          }
-          this.stop();
-          status("Narasi belum tersambung. Cerita tetap bisa dibaca.");
-          reject(new Error("Narasi belum tersambung"));
-        };
-        this.timer = setTimeout(fail, 20000);
-        socket.onopen = () => socket.send(JSON.stringify({ setup }));
-        socket.onmessage = async (event) => {
-          if (job !== this.job) return;
-          try {
-            const raw =
-              event.data instanceof Blob ? await event.data.text() : event.data;
-            if (job !== this.job) return;
-            const message = JSON.parse(raw);
-            if (message.error) {
-              fail();
-              return;
-            }
-            if (message.setupComplete) {
-              socket.send(
-                JSON.stringify({
-                  clientContent: {
-                    turns: [
-                      {
-                        role: "user",
-                        parts: [{ text: JSON.stringify({ card, passage }) }],
-                      },
-                    ],
-                    turnComplete: true,
-                  },
-                }),
-              );
-              return;
-            }
-            const content = message.serverContent;
-            if (!content) return;
-            if (content.interrupted) {
-              this.stop();
-              resolve();
-              return;
-            }
-            for (const part of content.modelTurn?.parts || []) {
-              const chunk = part.inlineData;
-              if (!chunk?.mimeType?.startsWith("audio/pcm")) continue;
-              if (!started) {
-                started = true;
-                clearTimeout(this.timer);
-                this.timer = setTimeout(fail, 45000);
-                duckMusic(true);
-                status("Sela bercerita…");
-              }
-              chunks.push(chunk);
-              this.play(chunk);
-            }
-            if (content.turnComplete) {
-              complete = true;
-              if (chunks.length) {
-                this.cache.set(key, chunks);
-                if (this.cache.size > 30)
-                  this.cache.delete(this.cache.keys().next().value);
-              }
-              socket.close();
-              this.socket = null;
-              finish();
-              resolve();
-            }
-          } catch {
-            fail();
-          }
-        };
-        socket.onerror = fail;
-        socket.onclose = () => {
-          if (!complete && job === this.job) fail();
-          else resolve();
-        };
-      });
-    } catch (error) {
-      if (error.name === "AbortError" || job !== this.job) return;
-      throw error;
-    }
+      this.stop();
+      status(
+        "Suara Gemini belum tersedia. Ketuk lanjut untuk membaca teksnya.",
+        false,
+      );
+    });
   }
 }
+
 export const narrator = new LiveNarrator();
-window.addEventListener("sela-volume", () => narrator.volume());
+globalThis.addEventListener?.("room-volume", () => narrator.volume());

@@ -3,9 +3,11 @@ __pycache__/
 *.pyc
 .env
 .env.*
+!.env.example
 *.log
 .DS_Store
 dist/
 .wrangler/
 .dev.vars
 .dev.vars.*
+temp_assets/

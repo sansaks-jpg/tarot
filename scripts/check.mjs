@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { DECK, BY_ID, SUITS, TOPICS } from "../public/deck.js";
 import {
   newReading,
@@ -37,6 +38,17 @@ for (const c of DECK) {
     c.id,
   );
   assert.ok(SUITS[c.suit]);
+  for (const variant of ["", "thumbs/"]) {
+    const webp = await fs.readFile(
+      new URL(`../public/assets/cards/${variant}${c.id}.webp`, import.meta.url),
+    );
+    assert.equal(webp.toString("ascii", 0, 4), "RIFF", c.id);
+    assert.equal(webp.toString("ascii", 8, 12), "WEBP", c.id);
+    assert.ok(
+      webp.length < (variant ? 40000 : 85000),
+      `Card budget: ${variant}${c.id}`,
+    );
+  }
   const svg = await fs.readFile(
     new URL(`../public/assets/cards/${c.id}.svg`, import.meta.url),
     "utf8",
@@ -61,7 +73,7 @@ const store = {
     this.data.set(key, val);
   },
 };
-for (const count of [1, 3])
+for (const count of [3])
   for (const topic of Object.keys(TOPICS)) {
     const r = newReading(topic, "Bagaimana aku bisa lebih siap?", count);
     assert.equal(r.candidates.length, 7);
@@ -92,8 +104,9 @@ for (const count of [1, 3])
     assert.match(exported, /CATATAN PRIBADI/);
     for (const id of r.selected) assert.ok(exported.includes(BY_ID[id].name));
   }
-assert.equal(loadNotes(store).length, 8);
-assert.equal(newReading("umum", "", 1).question, TOPICS.umum.question);
+assert.equal(loadNotes(store).length, 4);
+assert.equal(newReading("umum", "", 3).question, TOPICS.umum.question);
+assert.throws(() => newReading("umum", "", 1));
 assert.equal(
   escapeHTML("<img src=x onerror=\"oops\"> & 'x'"),
   "&lt;img src=x onerror=&quot;oops&quot;&gt; &amp; &#39;x&#39;",
@@ -125,12 +138,15 @@ const quotaStore = {
     throw new Error("Quota exceeded");
   },
 };
-const complete = newReading("umum", "", 1);
-chooseCard(complete, complete.candidates[0]);
-revealCard(complete);
+const complete = newReading("umum", "", 3);
+for (const id of complete.candidates.slice(0, 3)) chooseCard(complete, id);
+for (let i = 0; i < 3; i++) {
+  complete.current = i;
+  revealCard(complete);
+}
 assert.throws(() => saveNote(quotaStore, complete, "quota"));
 console.log(
-  "PASS: 1- and 3-card flows, all topics, no duplicates, completion guards, save/update/export, invalid storage, injection escaping, and unavailable storage.",
+  "PASS: three-card flows, single-card rejection, all topics, completion guards, save/update/export, invalid storage, injection escaping, and unavailable storage.",
 );
 const html = await fs.readFile(
   new URL("../public/index.html", import.meta.url),
@@ -158,7 +174,7 @@ for (const file of [
 ])
   execFileSync(process.execPath, [
     "--check",
-    new URL(`../public/${file}`, import.meta.url).pathname,
+    fileURLToPath(new URL(`../public/${file}`, import.meta.url)),
   ]);
 const css = await fs.readFile(
   new URL("../public/styles.css", import.meta.url),
