@@ -146,6 +146,7 @@ assert.match(nodes.get('main').innerHTML,/href="#baca"[^>]*data-reading-link/);
 assert.equal(navLinks[1].href,'#baca');
 const readyPick = vm.runInContext("pick()", context);
 assert.match(readyPick, /3 \/ 3/);
+assert.match(readyPick, /Tiga kartu sudah lengkap/);
 assert.ok(
   !readyPick
     .match(/<button[^>]*data-action="start-reading"[^>]*>/)[0]
@@ -162,6 +163,8 @@ assert.equal(engine.readingComplete(r), true);
 const summary = vm.runInContext("summary()", context);
 assert.match(summary, /data-action="new"/);
 assert.match(summary, /data-action="read-again"/);
+assert.match(summary, /class="summary-speech"/);
+assert.match(summary, /Tiga kartu sudah selesai bercerita/);
 assert.doesNotMatch(summary, /data-action="share"|write-note|Simpan catatan/);
 assert.equal((summary.match(/class="result-card"/g)||[]).length,3);
 assert.match(summary, /&lt;script&gt;/);

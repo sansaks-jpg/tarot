@@ -48,6 +48,19 @@ const state = {
   picking: false,
   revealing: false,
   passageLimit: 190,
+  setupComment: null,
+  pickNotice: null,
+  typedCommentShown: false,
+};
+const SELA_TOPIC_REACTIONS = {
+  hubungan:
+    "Urusan hati ya... Kadang yang bikin lelah bukan rasa sakitnya, tapi hal-hal yang belum sempat terucap. Mari kita lihat apa yang tersembunyi di sana.",
+  kerja:
+    "Tentang arah langkah dan pekerjaanmu. Kalau belakangan ini terasa berat atau membingungkan, wajar kok. Mari kita urai benang kusutnya satu per satu.",
+  diri:
+    "Kembali ke dalam diri sendiri... Sepertinya ada bagian batinmu yang sudah lama minta didengar tapi terus kamu tunda. Sini, luangkan waktu sejenak buat dirimu.",
+  umum:
+    "Pikiranmu lagi penuh ya? Nggak apa-apa, lepasin dulu beban di pundakmu sejenak. Kita mulai dari apa pun yang terasa paling dekat di hatimu.",
 };
 const arrow = '<span aria-hidden="true">→</span>';
 const icons = {
@@ -123,9 +136,9 @@ function mobileWelcome(hasReading) {
     </div>
     <div class="arrival-dialogue">
       <div class="arrival-speaker"><span><span aria-hidden="true">✦</span> Sela <small>· pembaca tarotmu</small></span><button type="button" class="arrival-voice" id="arrivalVoice" data-action="greeting" aria-label="Dengarkan sapaan Sela" aria-pressed="false" ${state.voiceAvailable ? "" : "hidden"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 5 9H2v6h3l4 4zM14 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg><span>Dengar Sela</span></button></div>
-      <p class="arrival-hello">${hasReading ? "Eh, kamu balik. Sini, duduk lagi." : "Hai, sini duduk dulu."}</p>
+      <p class="arrival-hello">${hasReading ? "Eh, kamu balik. Sini, duduk lagi." : "Hai, sini duduk dulu. Tarik nafas pelan-pelan…"}</p>
       <h1 tabindex="-1">${hasReading ? "Lanjut cerita kita?" : "Mau baca tarot?"}</h1>
-      <p class="arrival-invitation">${hasReading ? "Kartumu masih di sini. Kita lanjut pelan-pelan, ya." : "Aku temani kamu, satu kartu demi satu kartu. Atau mau kenalan dulu sama kartunya?"}</p>
+      <p class="arrival-invitation">${hasReading ? "Mejamu masih rapi, kartumu masih menunggu di sini. Kita lanjut pelan-pelan, ya." : "Silakan, duduk senyaman mungkin. Kira-kira bagian mana dari ceritamu atau dirimu yang lagi paling butuh kejelasan hari ini? Aku temani kamu mengurainya, satu kartu demi satu kartu."}</p>
       <div class="arrival-choices">
         <a class="arrival-choice choice-reading" href="#${hasReading ? resumeRoute() : "bacaan"}" data-reading-link>${cardsIcon}<span>${hasReading ? "Iya, lanjutkan bacaanku" : "Mau, bacain aku"}</span>${arrow}</a>
         <a class="arrival-choice choice-explore" href="#kartu"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="7" height="14" rx="1"/><rect x="14" y="5" width="7" height="14" rx="1"/><path d="M6.5 9v6m11-6v6"/></svg><span>Lihat-lihat kartu dulu</span>${arrow}</a>
@@ -151,13 +164,13 @@ function home() {
       <div class="welcome-copy">
         <p class="welcome-eyebrow"><span aria-hidden="true">✦</span> SELAMAT DATANG DI THE TAROT ROOM</p>
         <h1 tabindex="-1">Di balik kartu,<br>ada cerita<br><em>untukmu.</em></h1>
-        <p class="welcome-description">Ambil jeda dari ramainya hari. Pilih pertanyaan, buka tiga kartu, dan temukan sudut pandang baru bersama Sela.</p>
+        <p class="welcome-description">Ambil jeda dari ramainya hari. Duduklah senyaman mungkin, pilih ceritamu, dan biarkan Sela menemanimu mengurai apa yang sedang kamu rasakan.</p>
         <div class="welcome-actions">
           <a class="button primary welcome-start" href="#${hasReading ? resumeRoute() : "bacaan"}" data-reading-link>${hasReading ? "Lanjutkan bacaanku" : "Mulai baca tarot"} ${arrow}</a>
           <a class="welcome-collection" href="#kartu">Kenali kartunya <span aria-hidden="true">↗</span></a>
         </div>
         <p class="welcome-assurance"><span aria-hidden="true">✓</span> Gratis <span class="assurance-dot" aria-hidden="true">·</span> Tanpa akun <span class="assurance-dot" aria-hidden="true">·</span> Sesuai ritmemu</p>
-        <div class="welcome-host">${readerPortrait()}<div><span>KENALAN DENGAN SELA</span><p>“Aku temani kamu, satu kartu demi satu kartu.”</p><small>Pembaca tarot virtualmu</small></div></div>
+        <div class="welcome-host">${readerPortrait()}<div><span>KENALAN DENGAN SELA</span><p>“Aku temani kamu mendengar apa yang selama ini mengendap di dalam hatimu.”</p><small>Pembaca tarot virtualmu</small></div></div>
       </div>
       <div class="welcome-art">
         <div class="welcome-orbit" aria-hidden="true"></div>
@@ -203,7 +216,19 @@ function home() {
 function beginTopic(topic) {
   if (!Object.hasOwn(TOPICS, topic)) return;
   state.form = { topic, question: TOPICS[topic].templates[0], count: 3 };
+  state.setupComment = SELA_TOPIC_REACTIONS[topic];
   setHash("bacaan");
+}
+
+function setupSpeechText() {
+  const hasReading = state.reading && !state.reading.finished;
+  if (state.setupComment) return state.setupComment;
+  if (hasReading)
+    return "Selamat datang kembali. Duduk lagi... kita lanjutkan ceritamu yang sempat terjeda.";
+  return (
+    SELA_TOPIC_REACTIONS[state.form.topic] ||
+    "Silakan, duduk senyaman mungkin. Bagian mana dari ceritamu atau dirimu yang lagi paling butuh kejelasan hari ini?"
+  );
 }
 
 function setup() {
@@ -214,9 +239,22 @@ function setup() {
   if (!f.question && templates.length) {
     f.question = templates[0];
   }
+  const speech = setupSpeechText();
   return page(
     `${heading("BACA TAROT", "Pilih pertanyaanmu.")}
-    ${host("Pilih yang paling dekat dengan ceritamu. Tak perlu merangkai pertanyaan sendiri.")}
+    <div class="host-note setup-host-note">
+      ${readerPortrait()}
+      <div>
+        <div class="host-header">
+          <span>Sela <small>· pembaca tarotmu</small></span>
+          <button type="button" class="arrival-voice host-voice-btn" id="setupVoice" data-action="speak-setup" aria-label="Dengarkan Sela berbicara" aria-pressed="false" ${state.voiceAvailable ? "" : "hidden"}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 5 9H2v6h3l4 4zM14 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg>
+            <span>Dengar Sela</span>
+          </button>
+        </div>
+        <p class="host-speech" id="setupSpeech">${esc(speech)}</p>
+      </div>
+    </div>
     <form id="setupForm" class="setup-form">
       <div class="setup-fields">
         <fieldset>
@@ -281,6 +319,16 @@ function presence() {
   return `<div class="reader-presence"><picture><source media="(max-width: 699px)" srcset="/assets/presence-mobile.webp"><img src="/assets/presence.webp" width="840" height="577" alt="Sela duduk di seberang meja, siap membacakan kartumu" fetchpriority="high"></picture><span class="reader-name">Sela <small>pembaca virtual</small></span><span class="candle-glow" aria-hidden="true"></span></div>`;
 }
 
+function pickComment(selectedCount) {
+  if (selectedCount === 1)
+    return "Satu kartu pertama sudah kamu tarik... ini yang akan menceritakan akar dari pertanyaanmu.";
+  if (selectedCount === 2)
+    return "Dua kartu... kartu ini yang menangkap apa yang sedang bergejolak di dalam dirimu sekarang. Tinggal satu lagi.";
+  if (selectedCount >= 3)
+    return "Tiga kartu sudah lengkap di atas meja kain. Tarik nafas dalam-dalam... kalau kamu sudah siap, yuk kita buka satu per satu.";
+  return "Kartunya sudah aku sebar di atas meja kain. Nggak perlu ditebak pakai logika... ikuti getaran atau tarikan jemarimu. Ambil tiga kartu yang memanggilmu.";
+}
+
 function pick() {
   const r = state.reading,
     ready = r.selected.length === 3;
@@ -309,7 +357,7 @@ function pick() {
         <div class="shuffle-stack" aria-hidden="true"><span>${art("back")}</span><span>${art("back")}</span><span>${art("back")}</span></div>
       </div>
     </div>
-    <p class="table-conversation" role="status"><span>Sela</span>${ready ? "Sudah lengkap. Yuk, kita buka satu per satu." : "Aku sudah kocok kartunya. Sekarang giliranmu."}</p>
+    <p class="table-conversation" role="status"><span>Sela</span><span class="conversation-text" id="pickSpeech">${esc(state.pickNotice || pickComment(r.selected.length))}</span></p>
     <div class="screen-actions">
       <button class="button primary" data-action="start-reading" ${ready ? "" : "disabled"}>${ready ? "Mulai bacaan" : `Pilih ${3 - r.selected.length} kartu lagi`} ${arrow}</button>
     </div>`,
@@ -441,7 +489,14 @@ function activateMeaningTab(button) {
 }
 
 function storyLines(card, chapter) {
-  return cardStory(card, chapter, state.passageLimit);
+  const position = state.reading?.selected
+    ? state.reading.selected.indexOf(card.id)
+    : undefined;
+  return cardStory(card, chapter, state.passageLimit, {
+    position: position >= 0 ? position : (state.reading?.current ?? 0),
+    topic: state.reading?.topic,
+    question: state.reading?.question,
+  });
 }
 
 function dialogueFor(card) {
@@ -481,7 +536,7 @@ function reader() {
       .join(
         "",
       )}</div>${opened ? `<p class="card-keywords">${c.keywords}</p>` : '<p class="tap-hint">Sentuh kartu yang paling besar</p>'}</div></div>
-    ${opened ? dialogue(c) : `<p class="table-conversation"><span>Sela</span>${["Kita mulai dari masa lalu. Buka kartunya saat kamu siap.", "Sekarang, kita lihat apa yang sedang kamu hadapi.", "Terakhir, kita lihat kemungkinan langkah berikutnya."][r.current]}</p>`}
+    ${opened ? dialogue(c) : `<p class="table-conversation"><span>Sela</span><span class="conversation-text">${["Kita mulai dari kartu pertama. Akar dari ceritamu. Sentuh kartunya saat kamu siap mendengarkan.", "Sekarang kartu kedua... yang menangkap dinamika dan apa yang sedang bergejolak di batinmu. Buka kartunya pelan-pelan.", "Dan kartu terakhir... arah lentera untuk langkahmu ke depan. Buka saat hatimu siap."][r.current]}</span></p>`}
     <div class="screen-actions"><button class="button primary" id="storyNext" data-action="${opened ? "story-next" : "reveal"}">${opened ? (more ? "Lanjut" : r.current === 2 ? "Lihat tiga kartuku" : "Kartu berikutnya") : "Buka kartu"} ${arrow}</button></div>`,
     "reader-screen immersive-screen",
   );
@@ -644,6 +699,10 @@ function summary() {
     `${heading("TIGA KARTU TERBUKA", "Bacaanmu selesai.")}
     <div class="result-cards">${r.selected.map((id, i) => `<button class="result-card" data-action="card-detail" data-id="${id}" aria-label="Baca lagi ${esc(BY_ID[id].name)}"><span class="result-position">${positions()[i].name}</span>${art(id)}<strong>${BY_ID[id].name}</strong></button>`).join("")}</div>
     ${question(r)}
+    <div class="summary-speech">
+      <span class="speaker-name"><span aria-hidden="true">✦</span> Sela</span>
+      <p>“Tiga kartu sudah selesai bercerita untukmu hari ini. Ingat, kartu bukan vonis masa depan—kartu adalah cermin agar kamu bisa melihat dirimu dengan lebih jujur dan lembut. Ambil bagian yang beresonansi, dan lepaskan yang tidak.”</p>
+    </div>
     <div class="screen-actions"><button class="button primary" data-action="new">Mulai bacaan baru ${arrow}</button><button class="text-button" data-action="read-again">Baca kartu ini lagi</button></div>`,
     "reading-result",
   );
@@ -784,8 +843,8 @@ async function greetSela(button) {
   button.querySelector("span").textContent = "Sebentar…";
   const hasReading = state.reading && !state.reading.finished;
   const greeting = hasReading
-    ? "Eh, kamu balik. Sini, duduk lagi. Lanjut cerita kita? Kartumu masih di sini. Kita lanjut pelan-pelan, ya."
-    : "Hai, sini duduk dulu. Mau baca tarot? Aku temani kamu, satu kartu demi satu kartu. Atau mau kenalan dulu sama kartunya?";
+    ? "Eh, kamu balik. Sini, duduk lagi. Mejamu masih rapi, kartumu masih nunggu di sini. Lanjut cerita kita? Kita buka pelan-pelan, ya."
+    : "Hai, sini duduk dulu. Tarik nafas pelan-pelan... Kira-kira bagian mana dari ceritamu atau dirimu yang lagi paling butuh kejelasan hari ini? Aku temani kamu mengurainya, satu kartu demi satu kartu. Atau kamu mau kenalan dulu sama kartunya?";
   try {
     await narrator.speak(greeting, "Sambutan Sela", (value, speaking) => {
       if (!button.isConnected || job !== state.typingJob) return;
@@ -802,6 +861,45 @@ async function greetSela(button) {
     if (!button.isConnected || job !== state.typingJob) return;
     reset();
     status.textContent = "Suara belum tersedia. Kita ngobrol lewat teks dulu, ya.";
+  }
+}
+
+async function speakSetup(button) {
+  const text = document.getElementById("setupSpeech")?.textContent || setupSpeechText();
+  const reset = () => {
+    if (!button || !button.isConnected) return;
+    button.dataset.active = "false";
+    button.setAttribute("aria-pressed", "false");
+    button.setAttribute("aria-label", "Dengarkan Sela berbicara");
+    const span = button.querySelector("span");
+    if (span) span.textContent = "Dengar Sela";
+  };
+  if (button.dataset.active === "true") {
+    narrator.stop();
+    reset();
+    return;
+  }
+  await startSound();
+  if (state.route !== "bacaan" || !button.isConnected) return;
+  if (!audioEnabled() || !state.voiceAvailable) return;
+  const job = state.typingJob;
+  button.dataset.active = "true";
+  button.setAttribute("aria-label", "Hentikan suara Sela");
+  const span = button.querySelector("span");
+  if (span) span.textContent = "Sebentar…";
+  try {
+    await narrator.speak(text, "Sapaan Sela", (value, speaking) => {
+      if (!button.isConnected || job !== state.typingJob) return;
+      button.setAttribute("aria-pressed", String(!!speaking));
+      if (speaking) {
+        if (span) span.textContent = "Sela bicara";
+      } else if (value && !value.startsWith("Menyiapkan")) {
+        reset();
+      }
+    }, reset);
+  } catch {
+    if (!button.isConnected || job !== state.typingJob) return;
+    reset();
   }
 }
 
@@ -867,6 +965,8 @@ document.addEventListener("submit", (event) => {
     state.dealing = true;
     state.lastPick = null;
     state.dialogue.id = null;
+    state.setupComment = null;
+    state.pickNotice = null;
     startSound().then(() => sfx("shuffle"));
     document.activeElement?.blur();
     setHash("pilih");
@@ -877,8 +977,16 @@ document.addEventListener("submit", (event) => {
 
 document.addEventListener("input", (event) => {
   const t = event.target;
-  if (t.id === "question") state.form.question = t.value;
-  if (t.id === "question") updateTemplateSelection();
+  if (t.id === "question") {
+    state.form.question = t.value;
+    updateTemplateSelection();
+    if (t.value.trim().length > 3 && !state.typedCommentShown) {
+      state.typedCommentShown = true;
+      state.setupComment = "Tuliskan apa adanya dari hatimu. Nggak ada pertanyaan yang salah di meja ini.";
+      const speech = document.getElementById("setupSpeech");
+      if (speech) speech.textContent = state.setupComment;
+    }
+  }
 
   if (t.id === "cardSearch") {
     state.search = t.value;
@@ -896,6 +1004,12 @@ document.addEventListener("change", (event) => {
   const t = event.target;
   if (t.name === "topic") {
     state.form.topic = t.value;
+    const reaction = SELA_TOPIC_REACTIONS[t.value];
+    if (reaction) {
+      state.setupComment = reaction;
+      const speech = document.getElementById("setupSpeech");
+      if (speech) speech.textContent = reaction;
+    }
     const topicData = TOPICS[t.value];
     if (topicData) {
       const qField = document.getElementById("question");
@@ -951,6 +1065,7 @@ document.addEventListener("click", async (event) => {
   try {
     if (action === "close") closeModal();
     else if (action === "greeting") await greetSela(button);
+    else if (action === "speak-setup") await speakSetup(button);
     else if (action === "choose-topic") {
       beginTopic(button.dataset.topic);
       startSound();
@@ -959,6 +1074,8 @@ document.addEventListener("click", async (event) => {
     else if (action === "new") {
       state.reading = null;
       state.form.question = "";
+      state.setupComment = null;
+      state.pickNotice = null;
       setHash("bacaan");
     } else if (action === "read-again") {
       r.finished = false;
@@ -971,6 +1088,9 @@ document.addEventListener("click", async (event) => {
       document.getElementById("question").value = state.form.question;
       updateTemplateSelection();
       sfx("select");
+      state.setupComment = "Pertanyaan yang jujur... Simpan rasa penasaran ini di dadamu selagi kita siapkan kartunya.";
+      const speech = document.getElementById("setupSpeech");
+      if (speech) speech.textContent = state.setupComment;
     } else if (action === "pick") {
       if (
         state.picking ||
@@ -979,6 +1099,7 @@ document.addEventListener("click", async (event) => {
       )
         return;
       state.picking = true;
+      state.pickNotice = null;
       sfx("select");
       try {
         await animateChoice(
@@ -1016,6 +1137,7 @@ document.addEventListener("click", async (event) => {
         r.selected = [];
         r.revealed = [];
         r.current = 0;
+        state.pickNotice = "Ragu ya? Nggak masalah sama sekali. Kita acak lagi kartunya sampai hatimu terasa pas.";
       }
       r.candidates = shuffledCards().slice(0, 7);
       state.dealing = true;
@@ -1025,6 +1147,7 @@ document.addEventListener("click", async (event) => {
     } else if (action === "start-reading") {
       if (r.selected.length !== 3) return;
       r.current = 0;
+      state.pickNotice = null;
       setHash("baca");
     } else if (action === "reveal") {
       if (!r || state.revealing || r.revealed.includes(r.selected[r.current]))
@@ -1170,6 +1293,8 @@ fetch("/api/config")
     state.voiceMode = narrator.mode;
     const greeting = document.getElementById("arrivalVoice");
     if (greeting) greeting.hidden = !state.voiceAvailable;
+    const setupVoice = document.getElementById("setupVoice");
+    if (setupVoice) setupVoice.hidden = !state.voiceAvailable;
     if (state.route === "baca") render({ focus: false });
     else if (state.route === "bacaan") narrator.prefetch();
   })

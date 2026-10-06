@@ -45,9 +45,15 @@ Aplikasi memiliki lima rute berbasis hash tanpa reload halaman:
 
 Navigasi atas (`.room-nav`) memudahkan perpindahan antara Beranda, Baca Tarot (yang otomatis mengarahkan ke langkah bacaan aktif bila sesi sedang berjalan), dan Koleksi Kartu.
 
-## Suara
+## Suara dan Persona Sela
 
-Browser meminta token sementara ke server, lalu tersambung langsung ke Gemini Live. REST token memakai `bidiGenerateContentSetup` untuk mengunci model, voice dan instruksi. Konfigurasi `liveConnectConstraints` adalah bentuk SDK, bukan field REST yang diterima endpoint saat pemeriksaan ini.
+Browser meminta token sementara ke server, lalu tersambung langsung ke Gemini Live. REST token memakai `bidiGenerateContentSetup` untuk mengunci model, voice (`Aoede`), dan instruksi. Konfigurasi `liveConnectConstraints` adalah bentuk SDK, bukan field REST yang diterima endpoint saat pemeriksaan ini.
+
+Narasi Sela dirancang layaknya pembaca kartu tarot sungguhan—intim, empatik, dan mengalir natural tanpa kalimat klise/AI slop:
+- **Sambutan Personal:** Di beranda dan layar bacaan, Sela menyapa hangat dan mengajak penanya menenangkan diri serta memilih bagian hidup yang paling butuh kejelasan.
+- **Komentar Interaktif Setiap Gerakan:** Sela menanggapi pilihan topik (Asmara, Karir, Diri, Umum), pilihan pertanyaan, penarikan kartu satu per satu di meja kocokan (1/3, 2/3, 3/3), kocok ulang, hingga pesan penutup reflektif di akhir sesi.
+- **Pembacaan Kartu Kontekstual:** Pembacaan kartu tidak sekadar membacakan kamus template, melainkan menggabungkan observasi intuisi posisi (kartu 1: akar batin; kartu 2: pergulatan/tantangan internal; kartu 3: lentera langkah) serta dinamika energi arcana (Swords untuk overthinking/pikiran bising, Cups untuk kerentanan rasa, Wands untuk ritme energi, Pentacles untuk kepastian nyata, Major untuk siklus besar hidup).
+- **Struktur Tiga Bab:** Setiap kartu diuraikan dalam tiga bab bertahap: Makna batin, Langkah nyata sehari-hari, dan Refleksi hening.
 
 Satu koneksi dipakai sepanjang sesi. Bacaan pertama disiapkan saat tiga kartu sudah dipilih; bagian berikutnya disiapkan saat bagian saat ini berbicara. PCM dimainkan per potongan dengan penyangga 35 ms, tanpa menunggu satu respons selesai. Latensi layanan/jaringan tetap dapat terjadi. Suara hanya Gemini; jika layanan gagal, pesan di game meminta pemain melanjutkan dengan teks.
 
