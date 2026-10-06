@@ -171,15 +171,23 @@ for (const file of [
   "share.js",
   "story.js",
   "narrator.js",
+  "naskah.js",
+  "icons.js",
+  "captions.js",
+  "room-layout.js",
 ])
   execFileSync(process.execPath, [
     "--check",
     fileURLToPath(new URL(`../public/${file}`, import.meta.url)),
   ]);
-const css = await fs.readFile(
-  new URL("../public/styles.css", import.meta.url),
-  "utf8",
-);
+const cssFiles = ["styles.css", "room-ui.css"];
+const css = (
+  await Promise.all(
+    cssFiles.map((file) =>
+      fs.readFile(new URL(`../public/${file}`, import.meta.url), "utf8"),
+    ),
+  )
+).join("\n");
 assert.match(css, /prefers-reduced-motion/);
 assert.match(css, /env\(safe-area-inset-bottom\)/);
 assert.match(css, /focus-visible/);

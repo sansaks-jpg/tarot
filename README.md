@@ -1,73 +1,44 @@
 # The Tarot Room
 
-Game tarot tiga kartu untuk HP dan desktop. Beranda HP langsung mempertemukan pengunjung dengan Sela di meja tarot: “Mau baca tarot?” Pilih bacaan atau lihat-lihat koleksi kartu. Sapaan Sela bisa didengarkan setelah sentuhan jika suara tersedia. Beranda desktop tetap menampilkan tiga kartu klasik, pilihan topik, dan panduan singkat. Pengunjung memilih topik dan pertanyaan, mengambil tiga kartu, lalu mendengarkan Sela membacakan satu per satu. Gratis dan tanpa akun. Bacaan yang sedang berjalan bisa dilanjutkan setelah kembali ke beranda.
+Game tarot tiga kartu berbahasa Indonesia untuk HP dan desktop. Sela duduk di seberang meja, menyambut pengunjung, lalu membacakan kartu dengan 422 rekaman MP3 lokal. Gratis dan tanpa akun.
 
-## Lokal
+## Menjalankan lokal
 
-`npm run build` menyiapkan `dist`. `npm run serve` menyajikan game dan endpoint Gemini pada satu server di port 8080, terikat ke `0.0.0.0`. Bila server sudah berjalan, build saja; jangan menjalankan server kedua.
+- `npm run build` menyiapkan `dist` dan menjalankan pemeriksaan sumber, narator, alur UI, serta server statis.
+- `npm run serve` menyajikan hasil build di `http://localhost:8080`, terikat ke `0.0.0.0`. Bila server sudah berjalan, cukup build ulang.
+- Di HP pada Wi-Fi yang sama, gunakan alamat LAN komputer dan port 8080. Server mencetak alamat yang tersedia saat mulai.
 
-Buka `http://localhost:8080`. Di HP pada Wi-Fi yang sama, gunakan alamat LAN komputer dan port 8080. Alamat yang terdeteksi dicetak saat server mulai.
-
-Salin `.env.example` ke `.env` hanya jika `.env` belum ada. Pertahankan key yang sudah diisi:
-
-```dotenv
-GEMINI_API_KEY=key_kamu
-GEMINI_LIVE_MODEL=gemini-3.8-live
-GEMINI_LIVE_VOICE=Aoede
-SITE_URL=http://localhost:8080
-```
-
-`.env` tidak ikut Git atau hasil build. Server membaca konfigurasi setiap permintaan API, sehingga mengisi/mengganti key tidak memerlukan restart. Perubahan kode server/Functions memerlukan satu muat ulang proses server.
+Suara tidak membutuhkan API key. Server tidak memiliki endpoint pembangkit suara. Build memakai `SITE_URL` dari environment, atau `CF_PAGES_URL` pada Cloudflare, atau hanya nilai `SITE_URL` dalam `.env` lokal. Alamat ini dipakai untuk canonical, sitemap, ajakan, dan foto share. Pengaturan API lama tidak dipakai atau dikirim ke situs. Bila alamat belum diatur, share mengikuti alamat situs yang sedang dibuka.
 
 ## Cloudflare Pages
 
-Build command: `npm run build`. Output directory: `dist`. Root `functions/api` menyediakan `/api/config` dan `/api/live-token`.
+Build command: `npm run build`. Output directory: `dist`. Situs sepenuhnya statis; seluruh narasi berasal dari `assets/audio/clips`. Konfigurasi `SITE_URL` pada environment build bila memakai domain publik.
 
-Pakai nama variabel yang sama pada konfigurasi Pages:
+## Alur dan tampilan
 
-```dotenv
-GEMINI_API_KEY=key_kamu
-GEMINI_LIVE_MODEL=gemini-3.8-live
-GEMINI_LIVE_VOICE=Aoede
-SITE_URL=https://domain-kamu
-```
+- `#beranda`: bertemu Sela di meja dengan kartu tersebar; dengarkan sapaan, mulai atau lanjutkan bacaan, atau lihat koleksi.
+- `#bacaan`: dua langkah pendek, pilih topik lalu pertanyaan. Pengunjung dapat memilih contoh atau menulis sendiri, dan kembali mengubah topik.
+- `#pilih`: pilih tiga dari tujuh kartu tertutup. Kartu dan animasinya mengikuti koordinat area meja pada foto. Di layar pendek, pilihan yang sudah lengkap ditampilkan lebih besar pada area yang sama.
+- `#baca`: buka kartu satu per satu dengan animasi balik kartu dan dialog makna. Makna, simbol, langkah, dan refleksi berasal dari data asli 78 kartu; narasi tetap menggunakan naskah rekaman Sela. Caption bergerak dari bawah ke atas, memudar di bagian atas, dan mengikuti waktu pemutaran audio. Membuka, menutup, atau mengganti tab makna tidak menghentikan bacaan. Tombol kartu berikutnya langsung berpindah kartu; pengunjung tetap membuka kartu itu sendiri.
+- Akhir bacaan: tombol Bagikan hasil langsung membuka menu aplikasi HP dengan foto PNG 1080 × 1350 dan ajakan, setelah foto selesai disiapkan. Foto menggunakan kain meja, tiga kartu berukuran besar, nama/makna singkat, dan alamat web. Tidak ada bingkai bertumpuk, glow emas, badge, atau kotak ajakan. WhatsApp/Instagram dan tujuan lainnya mengikuti aplikasi yang tersedia di menu perangkat. Bila berbagi foto tidak didukung, dialog menjelaskan batasan dan menyediakan kirim ajakan ke WhatsApp langsung; simpan foto dan salin ajakan menjadi opsi tambahan. Pembatalan atau kegagalan share tidak otomatis mengunduh gambar. Memulai bacaan baru, termasuk lewat navigasi, mengosongkan topik dan pertanyaan sebelumnya. Putar ulang mengulang tiga kartu yang sama.
+- `#kartu`: katalog berbingkai dengan ikon kelompok, pencarian, filter, dan paginasi. Empat kartu per halaman di HP, enam di desktop. Detail memakai penjelasan asli kartu; tombol Dengar Sela memutar rekaman tentang kartu tersebut.
 
-Simpan `GEMINI_API_KEY` sebagai secret. `SITE_URL` merupakan alamat publik untuk canonical dan sitemap; tetapkan juga pada environment build Pages. Jangan memasukkan key ke kode browser atau `public`.
+Halaman menggunakan tinggi viewport, dengan navigasi ikon di atas. Halaman utama tidak digulir; makna panjang dapat digulir di dalam dialog. Foto Sela tetap terpasang sepanjang perpindahan layar. Sisi yang tidak terisi foto utama menggunakan blur foto ruang, dan fade form melebar tanpa batas panel. Tata letak menyesuaikan layar pendek, landscape, safe area, dan reduced motion.
 
-## Navigasi dan Alur
+## Rekaman dan naskah
 
-Aplikasi memiliki lima rute berbasis hash tanpa reload halaman:
-- `#beranda`: Di HP, menampilkan *arrival screen* hangat bersama Sela (“Mau baca tarot?”) lengkap dengan tombol audio sambutan interaktif dan dua pilihan aksi. Di desktop, menampilkan layar sambutan komprehensif dengan cuplikan kartu, pintasan topik, serta panduan 3 langkah.
-- `#bacaan`: Pemilihan topik (Asmara, Karir, Diri, Hari Ini) dan pertanyaan atau input bebas.
-- `#pilih`: Meja kocok kartu (7 kandidat acak) untuk memilih 3 kartu tarot.
-- `#baca`: Sesi visual novel interaktif di meja tarot. Kartu dibuka satu per satu dengan narasi Sela (teks dan audio Gemini Live jika diaktifkan).
-- `#kartu`: Galeri katalog 78 kartu Rider–Waite–Smith lengkap dengan modal detail, makna tegak/terbalik, kata kunci, dan saran refleksi.
+[docs/naskah-sela-tarot.md](docs/naskah-sela-tarot.md) merupakan salinan naskah yang diberikan pemilik. `public/naskah.js` memasangkan setiap ID klip dengan teks persis dari naskah. `public/narrator.js` hanya meminta MP3 yang sudah direkam; tidak ada Gemini Live atau suara sintetis saat sesi berlangsung.
 
-Navigasi atas (`.room-nav`) memudahkan perpindahan antara Beranda, Baca Tarot (yang otomatis mengarahkan ke langkah bacaan aktif bila sesi sedang berjalan), dan Koleksi Kartu.
+Urutan narasi: sambutan, pengisian cerita dan tanggapannya, mengocok, memilih, pengantar kartu, jembatan posisi/kelompok, makna, langkah, refleksi, lalu penutup sesuai topik dan penutup umum. Varian dipilih sekali per pemicu agar teks dan rekaman tetap sama. Rekaman selalu diputar utuh. Caption membagi teks menjadi frasa pendek dengan waktu perkiraan berdasarkan durasi dan posisi audio; rekaman belum memiliki timestamp kata.
 
-## Suara dan Persona Sela
+Audio dimulai setelah interaksi. Volume musik/efek dan suara Sela dapat diatur terpisah; musik mengecil ketika Sela berbicara. Jeda/lanjut mempertahankan posisi audio. Pramuat berbagi unduhan dengan pemutaran, dan cache hasil decode dibatasi delapan klip. Bila rekaman gagal dimuat, caption tetap berjalan dengan status yang terlihat.
 
-Sela menggunakan 422 klip audio pra-rekam (*pre-recorded*) yang telah dikompresi ke format MP3 mono 48kbps yang sangat ringan (total hanya ~22,8 MB untuk seluruh 422 file audio). Seluruh klip dimuat langsung dari aset situs tanpa latensi jaringan dan tanpa memakan kuota token API saat pengunjung bermain, sehingga siap dijalankan di Cloudflare Pages maupun secara offline. Jika klip audio lokal tidak ditemukan, sistem tetap mempertahankan jalur fallback streaming Gemini Live.
+## Aset dan pemeriksaan
 
-Narasi Sela dirancang layaknya pembaca kartu tarot sungguhan—intim, empatik, dan mengalir natural tanpa kalimat klise/AI slop:
-- **Sambutan Personal:** Di beranda dan layar bacaan, Sela menyapa hangat dan mengajak penanya menenangkan diri serta memilih bagian hidup yang paling butuh kejelasan.
-- **Komentar Interaktif Setiap Gerakan:** Sela menanggapi pilihan topik (Asmara, Karir, Diri, Umum), pilihan pertanyaan, penarikan kartu satu per satu di meja kocokan (1/3, 2/3, 3/3), kocok ulang, hingga pesan penutup reflektif di akhir sesi.
-- **Pembacaan Kartu Kontekstual:** Pembacaan kartu tidak sekadar membacakan kamus template, melainkan menggabungkan observasi intuisi posisi (kartu 1: akar batin; kartu 2: pergulatan/tantangan internal; kartu 3: lentera langkah) serta dinamika energi arcana (Swords untuk overthinking/pikiran bising, Cups untuk kerentanan rasa, Wands untuk ritme energi, Pentacles untuk kepastian nyata, Major untuk siklus besar hidup).
-- **Struktur Tiga Bab:** Setiap kartu diuraikan dalam tiga bab bertahap: Makna batin, Langkah nyata sehari-hari, dan Refleksi hening.
-- **Ekspresi Vokal Alami:** Disertai filler vokal intuitif (*"emmm"*, *"hmm"*, *"wah"*, *"waduh"*) dan jeda elipsis untuk menghasilkan intonasi percakapan yang hidup dan bernyawa.
+78 kartu Rider–Waite–Smith dari [TarotCards — mixvlad](https://github.com/mixvlad/TarotCards/tree/main/tarot/rider-waite), dengan WebP 400 px dan thumbnail 240 px. Foto ruang/pembaca merupakan aset generatif. Sumber, kredit, dan catatan aset ada di [docs/asset-notes.md](docs/asset-notes.md).
 
-Suara dimulai setelah sentuhan pemain. Musik memakai berkas ambient dengan loop, efek memakai rekaman kartu; musik mengecil (*ducking*) saat Sela berbicara. Tombol volume mengatur musik, efek, dan narasi.
+`npm run check` memeriksa data/mesin kartu, sintaks, 422 pasangan naskah dan MP3, seluruh makna asli, alur form/dialog, reset topik, caption menurut waktu audio termasuk kembali dari background, paginasi, volume terpisah, pembuatan dan pengiriman foto, serta URL konfigurasi. AudioContext, Canvas, dan Web Share disimulasikan pada pemeriksaan ini. `npm run build` menambahkan pemeriksaan byte-range MP3/musik dan akses server.
 
-Di HP, foto Sela yang sama (`welcome-room.webp`) tetap menjadi latar dari beranda, pilihan pertanyaan, pemilihan kartu, hingga bacaan dan hasil. Latar dipasang sekali di luar layar yang berganti; kartu dan panel percakapan berada di atas meja. Layar pemilihan dan bacaan mengikuti tinggi viewport HP. Teks narasi dibagi menjadi bagian pendek; bagian berikutnya muncul setelah suara selesai, dan pemain membuka setiap kartu sendiri. Kartu yang terbuka dapat disentuh untuk melihat detail. Koleksi kartu memakai halaman terpisah.
+Pengecekan browser pada 7 Oktober 2026 dibatasi pada posisi kartu di meja, sesuai izin pemilik. Lolos pada 280×400, 320×480, 320×568, 360×640, 375×667, 390×844, 412×915, 430×932, 480×640, 640×360, 844×390, 768×1024, dan 1280×800: enam tahap tampilan per ukuran, tujuh pengamatan animasi dengan 390 frame, serta 18 tangkapan layar. Kartu terukur tetap di dalam area meja, di bawah wajah Sela, dan tidak membuat halaman bergulir. Kebijakan autoplay, hasil share di aplikasi tujuan, dan pendengaran audio pada perangkat nyata belum diuji.
 
-## Aset
-
-78 kartu Rider–Waite–Smith dari [TarotCards — mixvlad](https://github.com/mixvlad/TarotCards/tree/main/tarot/rider-waite), dipilih karena gambar dan simbol cocok dengan isi deck. Gambar 400 px dan thumbnail 240 px dikompresi WebP. Foto asli dan SVG lama tetap tersimpan di sumber, tetapi tidak disalin ke build.
-
-Foto ruang/pembaca merupakan aset generatif. Palette dan logo mengikuti referensi pemilik. Sumber, lisensi, perubahan ukuran, dan catatan pembuatan ada di [docs/asset-notes.md](docs/asset-notes.md). Musik dan efek dimuat setelah interaksi; koleksi kartu dimuat bertahap.
-
-## Pemeriksaan
-
-`npm run check` memeriksa data 78 kartu, batas tiga kartu, simpan/ekspor, input HTML, template layar, backdrop persisten mobile, batas ukuran aset WebP, adaptasi beranda mobile/desktop, alur navigasi dan pelestarian sesi, konfigurasi Cloudflare, serta penjadwalan PCM/koneksi/cache Gemini. Pemeriksaan ini berjalan tanpa hasil build sebelumnya.
-
-`npm run build` menjalankan pemeriksaan sumber, membuat `dist`, lalu menjalankan `npm run check:build` untuk memeriksa streaming byte-range dari berkas yang baru dibuat. Pemeriksaan server memanggil handler langsung tanpa menyalakan server tambahan atau membaca `.env`. Urutan ini juga berlaku pada checkout baru di Cloudflare. Browser tetap diperlukan untuk memeriksa animasi, tata letak, kebijakan autoplay, dan suara nyata.
+Foto share juga dirender menggunakan Canvas lokal, tanpa browser. Tata letak teks seluruh 78 kartu, nama yang panjang, kartu tunggal, dan URL yang panjang diperiksa agar tetap berada di dalam gambar. [Web Share](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share) membutuhkan konteks aman HTTPS dan dukungan perangkat; aplikasi tujuan dapat mengabaikan caption teks, sehingga ajakan dan alamat web juga tercetak pada foto.

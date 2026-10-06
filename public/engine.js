@@ -1,4 +1,4 @@
-import { DECK, BY_ID, TOPICS } from "./deck.js";
+import { DECK, BY_ID, TOPICS } from "./deck.js?v=room-7";
 
 export const STORAGE_KEY = "sela-notes-v1";
 export function escapeHTML(value = "") {

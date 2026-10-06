@@ -25,8 +25,9 @@
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
     <link rel="alternate icon" href="/assets/favicon.png" type="image/png" />
-    <link rel="stylesheet" href="/styles.css?v=home-2" />
-    <link rel="preload" href="/assets/cards/back.svg?v=room-4" as="image" />
+    <link rel="stylesheet" href="/styles.css?v=room-7" />
+    <link rel="stylesheet" href="/room-ui.css?v=room-7" />
+    <link rel="preload" href="/assets/cards/back.svg?v=room-7" as="image" />
     <link rel="preload" href="/assets/brand.webp" as="image" />
     <link rel="preload" href="/assets/cards/m17.webp" as="image" media="(min-width: 700px)" />
     <link rel="preload" href="/assets/welcome-room.webp" as="image" media="(max-width: 699px)" />
@@ -36,7 +37,7 @@
       as="image"
       media="(max-width: 699px)"
     />
-    <script type="module" src="/app.js?v=home-2"></script>
+    <script type="module" src="/app.js?v=room-7"></script>
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -52,7 +53,7 @@
     </script>
   </head>
   <body>
-    <div class="room-backdrop" role="img" aria-label="Sela di meja tarot dengan cahaya lilin"></div>
+    <div class="room-backdrop" role="img" aria-label="Sela di meja tarot dengan cahaya lilin"><div class="room-scene"></div><div class="room-floor"></div></div>
     <a class="skip-link" href="#main">Langsung ke isi</a>
     <header class="site-header">
       <a
@@ -71,23 +72,11 @@
       </a>
       <div class="header-tools">
         <nav class="room-nav" aria-label="Navigasi utama">
-          <a href="#beranda" data-nav="beranda">Beranda</a>
-          <a href="#bacaan" data-nav="bacaan" data-reading-link>Baca tarot</a>
-          <a class="room-switcher" id="roomSwitcher" href="#kartu" data-nav="kartu"><span class="nav-full-label">Koleksi kartu</span><span class="nav-short-label">Kartu</span></a>
+          <a href="#beranda" data-nav="beranda" aria-label="Beranda" title="Beranda"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8M5 9v12h14V9M9 21v-7h6v7"/></svg></a>
+          <a href="#bacaan" data-nav="bacaan" data-reading-link aria-label="Baca tarot" title="Baca tarot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg></a>
+          <a class="room-switcher" id="roomSwitcher" href="#kartu" data-nav="kartu" aria-label="Koleksi kartu" title="Koleksi kartu"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="12" height="18" rx="2"/><path d="m5 5-3 1 4 15m8-14 2 4-2 4-2-4z"/></svg></a>
         </nav>
         <div class="sound-control">
-          <button
-            class="icon-button sound-toggle"
-            id="soundToggle"
-            type="button"
-            data-action="sound"
-            aria-pressed="true"
-            aria-label="Matikan musik dan efek suara"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M11 5 6 9H3v6h3l5 4zM16 9l5 6m0-6-5 6" />
-            </svg>
-          </button>
           <button
             class="icon-button"
             id="volumeToggle"
@@ -95,25 +84,18 @@
             data-action="volume"
             aria-expanded="false"
             aria-controls="soundSettings"
-            aria-label="Atur volume"
+            aria-label="Atur musik dan suara Sela"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 7h16M4 17h16M8 4v6m8 4v6" />
             </svg>
           </button>
           <div class="sound-settings" id="soundSettings" hidden>
-            <label for="soundVolume"
-              >Volume <output id="volumeLabel">100%</output></label
-            >
-            <input
-              id="soundVolume"
-              type="range"
-              min="0"
-              max="100"
-              value="100"
-              aria-label="Volume musik dan efek suara"
-            />
-            <p>Musik, efek kartu, dan suara pembaca.</p>
+            <div class="sound-settings-heading"><strong>Suasana & suara</strong><button class="text-button" id="soundToggle" type="button" data-action="sound" aria-pressed="true" aria-label="Matikan semua suara">Senyapkan</button></div>
+            <label for="musicVolume">Musik <output id="musicVolumeLabel">65%</output></label>
+            <input id="musicVolume" type="range" min="0" max="100" value="65" aria-label="Volume musik dan efek kartu" />
+            <label for="narratorVolume">Suara Sela <output id="narratorVolumeLabel">100%</output></label>
+            <input id="narratorVolume" type="range" min="0" max="100" value="100" aria-label="Volume narator Sela" />
           </div>
         </div>
       </div>

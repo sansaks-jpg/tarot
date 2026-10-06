@@ -3,9 +3,6 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
-import { localEnv } from "./local-env.mjs";
-import { onRequestGet } from "../functions/api/config.js";
-import { onRequestPost } from "../functions/api/live-token.js";
 
 const dist = fileURLToPath(new URL("../dist/", import.meta.url));
 const port = Number(process.env.PORT || 8080);
@@ -27,37 +24,6 @@ const mime = {
 
 export async function handle(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
-  if (url.pathname === "/api/config" || url.pathname === "/api/live-token") {
-    let response;
-    if (url.pathname === "/api/config" && req.method === "GET")
-      response = onRequestGet({ env: localEnv() });
-    else if (url.pathname === "/api/live-token" && req.method === "POST") {
-      let body = "";
-      for await (const chunk of req) {
-        body += chunk;
-        if (body.length > 1024) {
-          res.writeHead(413);
-          res.end();
-          return;
-        }
-      }
-      response = await onRequestPost({
-        request: new Request(url, {
-          method: "POST",
-          headers: req.headers,
-          body: body || "{}",
-        }),
-        env: localEnv(),
-      });
-    } else
-      response = new Response("Method not allowed", {
-        status: 405,
-        headers: { Allow: url.pathname === "/api/config" ? "GET" : "POST" },
-      });
-    res.writeHead(response.status, Object.fromEntries(response.headers));
-    res.end(await response.text());
-    return;
-  }
   if (!["GET", "HEAD"].includes(req.method)) {
     res.writeHead(405);
     res.end();

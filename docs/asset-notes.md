@@ -49,8 +49,8 @@ Hasil web: `public/assets/brand.webp`, 480 px, 30.3 KB. Referensi JPEG pemilik t
 - Foley: [Casino Audio](https://kenney.nl/assets/casino-audio), Kenney, CC0. `card-shuffle`, `card-fan-2`, `card-slide-3`, `card-place-2`, `card-shove-2`, dinormalisasi dan dikonversi MP3 mono 80 kbps. Lima berkas total 66.8 KB. Bukan oscillator/noise yang dibuat saat runtime.
 - Kredit terstruktur: `public/assets/audio/credits.json`.
 
-## Validasi suara
+## Narasi Sela pra-rekam
 
-Gemini model `gemini-3.8-live`, voice `Aoede`. Tes integrasi publik singkat: token HTTP 200, setupComplete, 11 potongan PCM, turnComplete. Potongan pertama sekitar 2453 ms sejak memulai koneksi baru. Browser juga menampilkan status membaca setelah PCM dijadwalkan ke AudioContext. Ini tidak menjamin latensi nol atau performa yang sama pada jaringan/perangkat lain.
+Narasi memakai 422 klip MP3 lokal di `public/assets/audio/clips`, dipasangkan dengan ID dan teks persis dari [naskah Sela](naskah-sela-tarot.md). Narator tidak memanggil API suara. Musik mengecil hanya selama rekaman sedang diputar. Klip dimuat setelah interaksi; cache hasil decode dibatasi delapan klip.
 
-API key tidak ditampilkan dalam log atau dibuka untuk pemeriksaan isi. Nilai hanya dipakai runtime server untuk autentikasi sesuai kebutuhan layanan.
+Pemeriksaan sumber memastikan 422 pasangan teks dan berkas tersedia, urutan bacaan seluruh 78 kartu lengkap, pencocokan audio tidak menerima potongan kalimat, serta jeda/lanjut dan pergantian klip tidak membocorkan suara lama. Ini bukan bukti pendengaran audio atau tata letak pada perangkat nyata.

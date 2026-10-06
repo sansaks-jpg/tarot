@@ -1,7 +1,8 @@
 // Recorded music and card foley. Audio files are requested after a user gesture.
 let ctx, master, music, effects, soundtrack;
 let enabled = true,
-  volume = 1,
+  musicLevel = 0.65,
+  narratorLevel = 1,
   ducked = false;
 const buffers = new Map(),
   pending = new Map(),
@@ -14,13 +15,13 @@ function context() {
   if (!AudioContext) return null;
   ctx = new AudioContext({ latencyHint: "interactive" });
   master = ctx.createGain();
-  master.gain.value = enabled ? volume : 0;
+  master.gain.value = enabled ? 1 : 0;
   master.connect(ctx.destination);
   music = ctx.createGain();
-  music.gain.value = ducked ? 0.16 : 0.66;
+  music.gain.value = musicLevel * (ducked ? 0.16 : 0.66);
   music.connect(master);
   effects = ctx.createGain();
-  effects.gain.value = 0.95;
+  effects.gain.value = musicLevel * 0.95;
   effects.connect(master);
   soundtrack = new Audio("/assets/audio/room.m4a");
   soundtrack.preload = "none";
@@ -41,13 +42,14 @@ function context() {
 }
 
 export const getAudioContext = () => context();
-export const audioVolume = () => Math.round(volume * 100);
+export const musicVolume = () => Math.round(musicLevel * 100);
+export const narratorVolume = () => Math.round(narratorLevel * 100);
 export const audioEnabled = () => enabled;
 const changed = () => globalThis.dispatchEvent?.(new Event("room-volume"));
 
 export function primeAudio() {
   if (!enabled || document.hidden || !context()) return false;
-  master.gain.setTargetAtTime(volume, ctx.currentTime, 0.035);
+  master.gain.setTargetAtTime(1, ctx.currentTime, 0.035);
   // Keep play() in the gesture's call stack for mobile autoplay policies.
   ctx.resume().catch(() => {});
   soundtrack.play().catch(() => {});
@@ -56,7 +58,7 @@ export function primeAudio() {
 export function duckMusic(on) {
   ducked = on;
   if (ctx && music)
-    music.gain.setTargetAtTime(on ? 0.16 : 0.66, ctx.currentTime, 0.15);
+    music.gain.setTargetAtTime(musicLevel * (on ? 0.16 : 0.66), ctx.currentTime, 0.15);
 }
 export async function enableAudio() {
   enabled = true;
@@ -80,11 +82,18 @@ export async function toggleAudio() {
   changed();
   return enabled;
 }
-export function setVolume(value) {
+export function setMusicVolume(value) {
   if (!Number.isFinite(Number(value))) return;
-  volume = Math.max(0, Math.min(1, Number(value) / 100));
-  if (ctx)
-    master.gain.setTargetAtTime(enabled ? volume : 0, ctx.currentTime, 0.03);
+  musicLevel = Math.max(0, Math.min(1, Number(value) / 100));
+  if (ctx) {
+    music.gain.setTargetAtTime(musicLevel * (ducked ? 0.16 : 0.66), ctx.currentTime, 0.03);
+    effects.gain.setTargetAtTime(musicLevel * 0.95, ctx.currentTime, 0.03);
+  }
+  changed();
+}
+export function setNarratorVolume(value) {
+  if (!Number.isFinite(Number(value))) return;
+  narratorLevel = Math.max(0, Math.min(1, Number(value) / 100));
   changed();
 }
 export function sfx(name) {

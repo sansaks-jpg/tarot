@@ -1,4 +1,4 @@
-import { DECK, BY_ID, SUITS, TOPICS, POSITIONS } from "./deck.js?v=room-4";
+import { DECK, BY_ID, SUITS, TOPICS, POSITIONS } from "./deck.js?v=room-7";
 import {
   escapeHTML as esc,
   newReading,
@@ -6,25 +6,33 @@ import {
   revealCard,
   readingComplete,
   shuffledCards,
-} from "./engine.js?v=room-4";
+} from "./engine.js?v=room-7";
 import {
   enableAudio,
   toggleAudio,
   audioEnabled,
-  audioVolume,
-  setVolume,
+  musicVolume,
+  narratorVolume,
+  setMusicVolume,
+  setNarratorVolume,
   sfx,
   primeAudio,
-} from "./audio.js?v=room-4";
-import { cardStory, nextChapter } from "./story.js?v=room-4";
-import { narrator } from "./narrator.js?v=room-4";
+} from "./audio.js?v=room-7";
+import { cardStory, nextChapter } from "./story.js?v=room-7";
+import { narrator } from "./narrator.js?v=room-7";
+import { getClipText, getCardClips, pickRandomVariant, readingScript, findClipId } from "./naskah.js?v=room-7";
+import { captionSegments, captionIndex } from "./captions.js?v=room-7";
+import { roomLayout } from "./room-layout.js?v=room-7";
+import { createShareImage, websiteURL, shareInvitation, canSharePhoto, sharePhoto } from "./share.js?v=room-7";
+import { icon } from "./icons.js?v=room-7";
 
 const main = document.getElementById("main");
 const modal = document.getElementById("modal");
 const mobileHomeQuery = matchMedia("(max-width: 699px)");
+const compactLandscapeQuery = matchMedia("(max-height: 480px) and (orientation: landscape)");
 const state = {
   reading: null,
-  form: { topic: "umum", question: "", count: 3 },
+  form: { topic: null, question: "", count: 3 },
   route: "beranda",
   filter: "all",
   search: "",
@@ -36,44 +44,122 @@ const state = {
   lastPick: null,
   dealing: true,
   dialogue: { id: null, chapter: "makna", line: 0 },
-  typing: false,
-  typeTimer: null,
-  revealUntil: 0,
-  voiceAvailable: false,
+  voiceAvailable: true,
   narration: true,
-  voiceMode: "none",
   autoRead: true,
   typingJob: 0,
   dialogueTimer: null,
   picking: false,
   revealing: false,
-  passageLimit: 190,
   setupComment: null,
   pickNotice: null,
   typedCommentShown: false,
+  setupStep: "topic",
+  customQuestion: false,
+  cues: {},
+  pickIntro: null,
+  preIntro: null,
+  readingExpanded: false,
+  modalMode: null,
+  modalPaused: false,
+  caption: null,
+  captionFrame: null,
+  shareResult: null,
 };
-const SELA_TOPIC_REACTIONS = {
-  hubungan:
-    "Emmm... urusan hati ya. Kadang yang bikin lelah bukan rasanya, tapi hal-hal yang belum sempat terucap. Mari kita lihat apa yang tersembunyi di sana.",
-  kerja:
-    "Hmm... tentang arah langkah dan pekerjaanmu. Kalau belakangan ini terasa berat atau membingungkan, wajar kok. Mari kita urai benang kusutnya satu per satu.",
-  diri:
-    "Emmm... kembali ke dalam diri sendiri. Sepertinya ada bagian batinmu yang sudah lama minta didengar tapi terus kamu tunda. Sini, luangkan waktu sejenak buat dirimu.",
-  umum:
-    "Wah... pikiranmu lagi penuh banget ya? Nggak apa-apa, lepasin dulu beban di pundakmu sejenak. Kita mulai dari apa pun yang terasa paling dekat di hatimu.",
-};
-const arrow = '<span aria-hidden="true">→</span>';
-const icons = {
-  umum: '<svg viewBox="0 0 24 24"><path d="m12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3z"/></svg>',
-  hubungan:
-    '<svg viewBox="0 0 24 24"><path d="M12 21S2 15 2 8a5 5 0 0 1 10-1A5 5 0 0 1 22 8c0 7-10 13-10 13z"/></svg>',
-  kerja: '<svg viewBox="0 0 24 24"><path d="M5 19 19 5M5 5h14v14"/></svg>',
-  diri: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v3m0 16v3M1 12h3m16 0h3M4 4l2 2m12 12 2 2M4 20l2-2M18 6l2-2"/></svg>',
-};
+const arrow = icon("arrow");
+const icons = Object.fromEntries(Object.keys(TOPICS).map(key => [key, icon(key)]));
+const chapterLabels = { makna: "Makna", langkah: "Langkah", refleksi: "Refleksi" };
+
+function cardHero(card, position = "") {
+  return `<div class="card-hero"><div class="card-hero-art">${art(card.id)}</div><div><p class="card-category">${icon(card.suit)} ${esc(SUITS[card.suit].name)}${position ? ` · ${position}` : ""}</p><h3>${esc(card.indo)}</h3><p class="card-hero-keywords">${esc(card.keywords)}</p></div></div>`;
+}
+
+function captionMarkup(text) {
+  return `<section class="live-caption" aria-label="Caption narasi Sela"><div class="caption-window"><div class="caption-flow" data-caption-flow><p>${esc(captionSegments(text)[0]?.text || "")}</p></div></div><p class="sr-only" data-caption-accessible>${esc(text)}</p></section>`;
+}
+
+function drawCaption(force = false) {
+  const caption = state.caption;
+  if (!caption) return;
+  const index = captionIndex(caption.segments, caption.elapsed, caption.duration);
+  if (!force && index === caption.index) return;
+  caption.index = index;
+  const previous = caption.segments.slice(Math.max(0, index - 2), index).map(segment => segment.text);
+  const lines = [...caption.history, ...previous].slice(-2);
+  const active = caption.segments[index]?.text || "";
+  document.querySelectorAll("[data-caption-flow]").forEach(node => {
+    node.innerHTML = `<div class="caption-roll">${lines.map(text => `<p class="caption-past">${esc(text)}</p>`).join("")}<p class="caption-current">${esc(active)}</p></div>`;
+  });
+  document.querySelectorAll("[data-caption-accessible]").forEach(node => node.textContent = caption.text);
+}
+
+function beginCaption(id, text, job, fallback = false) {
+  id = findClipId(id) || id;
+  cancelAnimationFrame(state.captionFrame);
+  const prior = state.caption;
+  const history = prior?.id !== id ? (prior?.segments.slice(Math.max(0, prior.index - 1), prior.index + 1).map(segment => segment.text) || []) : [];
+  const caption = { id, text, job, history, segments: captionSegments(text), index: -1, elapsed: 0, duration: Math.max(6500, text.split(/\s+/).length * 330) / 1000, fallback, ended: false, lastFrame: performance.now() };
+  state.caption = caption;
+  drawCaption(true);
+  const tick = now => {
+    if (state.caption !== caption || job !== state.typingJob || document.hidden) return;
+    const clock = narrator.playback();
+    if (clock?.id === id) { caption.elapsed = clock.elapsed; caption.duration = clock.duration; }
+    else if (caption.ended) caption.elapsed = caption.duration;
+    else if (caption.fallback && !(state.route === "baca" && !state.autoRead) && !state.modalPaused) caption.elapsed = Math.min(caption.duration, caption.elapsed + Math.max(0, now - caption.lastFrame) / 1000);
+    caption.lastFrame = now;
+    drawCaption();
+    state.captionFrame = requestAnimationFrame(tick);
+  };
+  caption.tick = tick;
+  state.captionFrame = requestAnimationFrame(tick);
+}
+
+function resumeCaptionClock() {
+  const caption = state.caption;
+  if (!caption?.tick || caption.job !== state.typingJob) return;
+  cancelAnimationFrame(state.captionFrame);
+  caption.lastFrame = performance.now();
+  state.captionFrame = requestAnimationFrame(caption.tick);
+}
+
+function finishCaption(job, result) {
+  if (state.caption?.job !== job) return;
+  if (result?.audio === false) state.caption.fallback = true;
+  else { state.caption.ended = true; state.caption.elapsed = state.caption.duration; drawCaption(); }
+}
+
+function cue(prefix, fresh = false) {
+  if (fresh || !state.cues[prefix]) state.cues[prefix] = pickRandomVariant(prefix);
+  return state.cues[prefix];
+}
+
+function speakCue(id, after = () => {}) {
+  const job = ++state.typingJob;
+  const text = getClipText(id) || String(id || "");
+  beginCaption(id, text, job, !audioEnabled() || !state.audioTouched);
+  if (!id || !state.narration || !audioEnabled() || !state.audioTouched) {
+    state.dialogueTimer = setTimeout(() => { if (job === state.typingJob) after(); }, Math.max(6500, text.split(/\s+/).length * 330));
+    return;
+  }
+  narrator.speak(id, "Sela", (value, speaking) => {
+    if (job !== state.typingJob) return;
+    document.querySelectorAll(".cue-status").forEach(node => {
+      node.textContent = speaking ? "Sela sedang bicara" : value;
+    });
+  }, result => { if (job === state.typingJob) { finishCaption(job, result); after(); } }).catch(() => {});
+}
+
+function setSetupCue(prefix) {
+  state.setupComment = getClipText(cue(prefix, true));
+  const speech = document.getElementById("setupSpeech");
+  if (speech) speech.textContent = state.setupComment;
+  if (state.route === "bacaan") speakCue(state.setupComment);
+}
 
 const art = (id, extra = "") => {
   const isBack = id === "back";
-  const src = isBack ? "/assets/cards/back.svg?v=room-4" : `/assets/cards/${id}.webp`;
+  const src = isBack ? "/assets/cards/back.svg?v=room-7" : `/assets/cards/${id}.webp`;
   const responsive = isBack
     ? ""
     : `srcset="/assets/cards/thumbs/${id}.webp 240w, ${src} 400w" sizes="(min-width: 700px) 220px, 40vw"`;
@@ -109,7 +195,7 @@ function updateTemplateSelection() {
     chip.classList.toggle("active", selected);
     chip.setAttribute("aria-pressed", String(selected));
     const dot = chip.querySelector(".chip-star");
-    if (dot) dot.textContent = selected ? "●" : "○";
+    if (dot) dot.innerHTML = selected ? icon("check") : "";
   });
 }
 
@@ -120,213 +206,90 @@ function setHash(hash) {
 
 function resumeRoute() {
   const r = state.reading;
-  return !r ? "bacaan" : r.selected.length === 3 ? "baca" : "pilih";
+  return !r || r.finished ? "bacaan" : r.selected.length === 3 ? "baca" : "pilih";
+}
+
+function resetReadingSetup() {
+  resetShareResult();
+  state.reading = null;
+  state.form = { topic: null, question: "", count: 3 };
+  state.setupStep = "topic";
+  state.customQuestion = false;
+  state.typedCommentShown = false;
+  state.cues = {};
+  state.setupComment = null;
+  state.pickNotice = null;
+  state.pickIntro = null;
+  state.preIntro = null;
+  state.dialogue = { id: null, chapter: "makna", line: 0 };
+  state.autoRead = true;
 }
 
 function mobileWelcome(hasReading) {
-  const cardsIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="11" height="17" rx="2"/><path d="m5 5-3 1 4 16 4-1m3-13 2 3-2 3-2-3z"/></svg>';
+  const greeting = getClipText(cue(hasReading ? "SAMBUTAN-KEMBALI" : "SAMBUTAN-BARU"));
+  const scattered = ["back", "m18", "back", "m17", "back", "m19", "back", "back"];
   return page(
-    `<div class="arrival-scene" aria-hidden="true">
-      <div class="arrival-light light-left" aria-hidden="true"></div>
-      <div class="arrival-light light-right" aria-hidden="true"></div>
-    </div>
-    <div class="arrival-table" aria-hidden="true">
-      <p>Kartunya sudah siap.</p>
-      <div class="arrival-stack"><span>${art("back")}</span><span>${art("back")}</span><span>${art("back")}</span></div>
-    </div>
-    <div class="arrival-dialogue">
-      <div class="arrival-speaker"><span><span aria-hidden="true">✦</span> Sela <small>· pembaca tarotmu</small></span><button type="button" class="arrival-voice" id="arrivalVoice" data-action="greeting" aria-label="Dengarkan sapaan Sela" aria-pressed="false" ${state.voiceAvailable ? "" : "hidden"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 5 9H2v6h3l4 4zM14 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg><span>Dengar Sela</span></button></div>
-      <p class="arrival-hello">${hasReading ? "Emmm... kamu balik lagi. Sini, duduk lagi." : "Emmm... hai, sini duduk dulu. Tarik nafas pelan-pelan…"}</p>
-      <h1 tabindex="-1">${hasReading ? "Lanjut cerita kita?" : "Mau baca tarot?"}</h1>
-      <p class="arrival-invitation">${hasReading ? "Mejamu masih rapi, kartumu masih menunggu di sini. Kita lanjut pelan-pelan, ya." : "Silakan, duduk senyaman mungkin. Kira-kira kamu mau baca tentang dirimu yang bagian mana hari ini? Aku temani kamu mengurainya, satu kartu demi satu kartu."}</p>
-      <div class="arrival-choices">
-        <a class="arrival-choice choice-reading" href="#${hasReading ? resumeRoute() : "bacaan"}" data-reading-link>${cardsIcon}<span>${hasReading ? "Iya, lanjutkan bacaanku" : "Mau, bacain aku"}</span>${arrow}</a>
-        <a class="arrival-choice choice-explore" href="#kartu"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="7" height="14" rx="1"/><rect x="14" y="5" width="7" height="14" rx="1"/><path d="M6.5 9v6m11-6v6"/></svg><span>Lihat-lihat kartu dulu</span>${arrow}</a>
-      </div>
+    `<div class="arrival-scene" aria-hidden="true"><div class="arrival-light light-left"></div><div class="arrival-light light-right"></div></div>
+    <div class="session-heading arrival-heading"><p class="eyebrow">SELA · PEMBACA TAROTMU</p><h1 tabindex="-1">${hasReading ? "Cerita kita belum selesai." : "Duduk dulu. Ambil jeda."}</h1></div>
+    <div class="arrival-scatter table-stage" data-table-region aria-label="Kartu tarot tersebar di tengah meja">${scattered.map((id, i) => `<${id === "back" ? "span" : "button"} class="scatter-card" style="--x:${[-.29, -.21, -.13, -.04, .07, .16, .24, .29][i]};--y:${[9, -3, 6, -6, 8, -3, 5, 11][i]}px;--tilt:${[-27, -20, -13, -6, 4, 13, 20, 27][i]}deg;--i:${i}" ${id === "back" ? 'aria-hidden="true"' : `type="button" data-action="card-detail" data-id="${id}" aria-label="Kenali ${esc(BY_ID[id].name)}"`}>${art(id)}</${id === "back" ? "span" : "button"}>`).join("")}</div>
+    <div class="room-bottom arrival-bottom">
+      <div class="arrival-speaker"><span class="speaker-name">Sela</span><button type="button" class="arrival-voice" id="arrivalVoice" data-action="greeting" aria-label="Dengarkan sapaan Sela" aria-pressed="false">${icon("sound")}<span>Dengar Sela</span></button></div>
+      <span class="sr-only" id="arrivalSpeech">${esc(greeting)}</span>${captionMarkup(greeting)}
+      <div class="arrival-choices"><a class="button primary" href="#${hasReading ? resumeRoute() : "bacaan"}" data-reading-link>${hasReading ? "Lanjutkan bacaanku" : "Mulai bacaan"} ${arrow}</a><a class="text-button" href="#kartu">Kenali 78 kartu ${icon("cards")}</a></div>
       <p class="arrival-voice-status" id="arrivalVoiceStatus" role="status" aria-live="polite"></p>
-      <p class="arrival-reassurance">Santai. Di sini, nggak perlu buru-buru.</p>
-    </div>`,
-    "arrival-screen",
-  );
+    </div>`, "arrival-screen");
 }
 
 function home() {
-  const topicNotes = {
-    hubungan: "Tentang hati dan orang terdekat.",
-    kerja: "Arah baru untuk langkahmu.",
-    diri: "Kembali mendengarkan dirimu.",
-    umum: "Apa pun yang sedang kamu pikirkan.",
-  };
-  const hasReading = state.reading && !state.reading.finished;
-  if (mobileHomeQuery.matches) return mobileWelcome(hasReading);
-  return page(
-    `<div class="welcome-hero">
-      <div class="welcome-copy">
-        <p class="welcome-eyebrow"><span aria-hidden="true">✦</span> SELAMAT DATANG DI THE TAROT ROOM</p>
-        <h1 tabindex="-1">Di balik kartu,<br>ada cerita<br><em>untukmu.</em></h1>
-        <p class="welcome-description">Ambil jeda dari ramainya hari. Duduklah senyaman mungkin, pilih ceritamu, dan biarkan Sela menemanimu mengurai apa yang sedang kamu rasakan.</p>
-        <div class="welcome-actions">
-          <a class="button primary welcome-start" href="#${hasReading ? resumeRoute() : "bacaan"}" data-reading-link>${hasReading ? "Lanjutkan bacaanku" : "Mulai baca tarot"} ${arrow}</a>
-          <a class="welcome-collection" href="#kartu">Kenali kartunya <span aria-hidden="true">↗</span></a>
-        </div>
-        <p class="welcome-assurance"><span aria-hidden="true">✓</span> Gratis <span class="assurance-dot" aria-hidden="true">·</span> Tanpa akun <span class="assurance-dot" aria-hidden="true">·</span> Sesuai ritmemu</p>
-        <div class="welcome-host">${readerPortrait()}<div><span>KENALAN DENGAN SELA</span><p>“Aku temani kamu mendengar apa yang selama ini mengendap di dalam hatimu.”</p><small>Pembaca tarot virtualmu</small></div></div>
-      </div>
-      <div class="welcome-art">
-        <div class="welcome-orbit" aria-hidden="true"></div>
-        <span class="welcome-moon" aria-hidden="true">☾</span>
-        <span class="welcome-spark spark-one" aria-hidden="true">✧</span>
-        <span class="welcome-spark spark-two" aria-hidden="true">✦</span>
-        <span class="welcome-spark spark-three" aria-hidden="true">✧</span>
-        <p class="art-inscription" aria-hidden="true">EVERY CARD TELLS A STORY</p>
-        <div class="welcome-deck" aria-label="Kenali tiga kartu tarot klasik">
-          ${[
-            ["m18", "moon"],
-            ["m19", "sun"],
-            ["m17", "star"],
-          ].map(([id, name]) => `<button type="button" class="welcome-card welcome-card-${name}" data-action="card-detail" data-id="${id}" aria-label="Kenali ${esc(BY_ID[id].name)}"><img src="/assets/cards/${id}.webp" width="400" height="667" alt="${esc(BY_ID[id].name)}" ${name === "star" ? 'fetchpriority="high"' : 'decoding="async"'}></button>`).join("")}
-        </div>
-        <div class="art-spread" aria-hidden="true"><span>Masa lalu</span><span>✦</span><span>Masa kini</span><span>✦</span><span>Masa depan</span></div>
-        <p class="art-caption">Tiga kartu. Satu cerita milikmu.</p>
-        <p class="art-hint">Sentuh kartu untuk mengenalnya</p>
-      </div>
-    </div>
-    <div class="welcome-details" aria-label="Tentang permainan">
-      <p><span aria-hidden="true">✦</span> <strong>78 kartu klasik</strong><span class="detail-note">Rider–Waite–Smith</span></p>
-      <p><span aria-hidden="true">◷</span> <strong>Tanpa terburu-buru</strong><span class="detail-note">Buka kartu satu per satu</span></p>
-      <p><span aria-hidden="true">♡</span> <strong>Ruang untuk dirimu</strong><span class="detail-note">Bacaan berbahasa Indonesia</span></p>
-    </div>
-    <section class="welcome-topics" aria-labelledby="welcomeTopicsTitle">
-      <div class="welcome-section-heading"><div><p class="eyebrow">MULAI DARI CERITAMU</p><h2 id="welcomeTopicsTitle">Apa yang ada di pikiranmu?</h2></div><p>Pilih yang paling dekat denganmu.<br>Sela akan menemanimu dari sana.</p></div>
-      <div class="welcome-topic-grid">${["hubungan", "kerja", "diri", "umum"].map(key => `<button type="button" class="welcome-topic" data-action="choose-topic" data-topic="${key}"><span class="welcome-topic-icon" aria-hidden="true">${icons[key]}</span><strong>${TOPICS[key].label}</strong><span class="welcome-topic-note">${topicNotes[key]}</span><span class="welcome-topic-arrow" aria-hidden="true">↗</span></button>`).join("")}</div>
-    </section>
-    <section class="welcome-guide" aria-labelledby="welcomeGuideTitle">
-      <div><p class="eyebrow">PERTAMA KALI MAIN?</p><h2 id="welcomeGuideTitle">Sesederhana<br>mengikuti rasa.</h2></div>
-      <ol class="welcome-guide-steps">
-        <li><span>01</span><div><h3>Bawa satu pertanyaan</h3><p>Pilih topik dan pertanyaan yang ingin kamu jelajahi.</p></div></li>
-        <li><span>02</span><div><h3>Pilih tiga kartu</h3><p>Kartu dikocok. Ambil tiga yang menarik perhatianmu.</p></div></li>
-        <li><span>03</span><div><h3>Dengarkan ceritanya</h3><p>Buka satu per satu. Sela menemanimu memahami maknanya.</p></div></li>
-      </ol>
-    </section>
-    <footer class="welcome-footer"><span>The Tarot Room <span aria-hidden="true">✦</span></span><p>Ambil jeda. Temukan sudut pandang.</p><a href="#${hasReading ? resumeRoute() : "bacaan"}" data-reading-link>${hasReading ? "Lanjutkan bacaan" : "Masuk ke ruang tarot"} ${arrow}</a></footer>`,
-    "welcome-screen",
-  );
+  return mobileWelcome(state.reading && !state.reading.finished);
 }
 
 function beginTopic(topic) {
   if (!Object.hasOwn(TOPICS, topic)) return;
   state.form = { topic, question: TOPICS[topic].templates[0], count: 3 };
-  state.setupComment = SELA_TOPIC_REACTIONS[topic];
+  state.setupStep = "question";
+  state.customQuestion = false;
+  setSetupCue(`TOPIK-${topic}`);
   setHash("bacaan");
 }
 
 function setupSpeechText() {
-  const hasReading = state.reading && !state.reading.finished;
   if (state.setupComment) return state.setupComment;
-  if (hasReading)
-    return "Emmm... selamat datang kembali. Duduk lagi... kita lanjutkan ceritamu yang sempat terjeda.";
-  return (
-    SELA_TOPIC_REACTIONS[state.form.topic] ||
-    "Emmm... silakan, duduk senyaman mungkin. Kamu mau baca tentang dirimu yang bagian mana hari ini?"
-  );
+  const returning = state.reading && !state.reading.finished;
+  return getClipText(cue(returning ? "SETUP-KEMBALI" : "SETUP"));
 }
 
 function setup() {
-  narrator.prefetch();
   const f = state.form;
-  const currentTopic = TOPICS[f.topic] || TOPICS.umum;
-  const templates = currentTopic.templates || [currentTopic.question];
-  if (!f.question && templates.length) {
-    f.question = templates[0];
-  }
-  const speech = setupSpeechText();
-  return page(
-    `${heading("BACA TAROT", "Pilih pertanyaanmu.")}
-    <div class="host-note setup-host-note">
-      ${readerPortrait()}
-      <div>
-        <div class="host-header">
-          <span>Sela <small>· pembaca tarotmu</small></span>
-          <button type="button" class="arrival-voice host-voice-btn" id="setupVoice" data-action="speak-setup" aria-label="Dengarkan Sela berbicara" aria-pressed="false" ${state.voiceAvailable ? "" : "hidden"}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 5 9H2v6h3l4 4zM14 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg>
-            <span>Dengar Sela</span>
-          </button>
-        </div>
-        <p class="host-speech" id="setupSpeech">${esc(speech)}</p>
+  const topic = TOPICS[f.topic] || TOPICS.umum;
+  const templates = topic.templates;
+  if (!f.question && f.topic) f.question = templates[0];
+  const choosingTopic = state.setupStep === "topic";
+  const notes = { hubungan: "Hati & kedekatan", kerja: "Arah & kesempatan", diri: "Kebutuhan & kebiasaan", umum: "Apa yang mengganjal" };
+  return page(`
+    <div class="setup-room-space" aria-hidden="true"></div>
+    <div class="setup-panel">
+      <div class="setup-title-row">${heading("CERITAMU · " + (choosingTopic ? "1/2" : "2/2"), choosingTopic ? "Mau bicara soal apa?" : "Pilih pertanyaanmu.")}
+        ${choosingTopic ? `<span class="celestial-seal">${icon("umum")}</span>` : `<button type="button" class="icon-button" data-action="setup-back" aria-label="Kembali memilih topik">${icon("back")}</button>`}
       </div>
-    </div>
-    <form id="setupForm" class="setup-form">
-      <div class="setup-fields">
-        <fieldset>
-          <legend>Hari ini kita bicara tentang…</legend>
-          <div class="topics">${Object.entries(TOPICS)
-            .map(
-              ([key, t]) =>
-                `<label class="topic-tile" data-topic="${key}">
-                  <input type="radio" name="topic" value="${key}" ${f.topic === key ? "checked" : ""}>
-                  <span class="topic-icon" aria-hidden="true">${icons[key] || "✦"}</span>
-                  <span class="topic-title">${t.label}</span>
-                  <span class="tile-check" aria-hidden="true">✓</span>
-                </label>`,
-            )
-            .join("")}
+      <div class="host-note setup-host-note"><div class="host-header"><span class="speaker-name">Sela <small>· aku dengarkan</small></span><button type="button" class="arrival-voice" id="setupVoice" data-action="speak-setup" aria-label="Dengarkan Sela berbicara" aria-pressed="false">${icon("sound")}<span>Dengar Sela</span></button></div><p class="host-speech" id="setupSpeech">${esc(setupSpeechText())}</p><span class="cue-status" role="status"></span></div>
+      <form id="setupForm" class="setup-form" data-step="${state.setupStep}">
+        <div class="setup-fields">
+          <fieldset class="topic-fields" ${choosingTopic ? "" : "hidden"}><legend class="sr-only">Pilih topik bacaan</legend><div class="topics">${Object.entries(TOPICS).map(([key, t]) => `<label class="topic-tile" data-topic="${key}"><input type="radio" name="topic" value="${key}" ${f.topic === key ? "checked" : ""}><span class="topic-icon">${icons[key]}</span><span class="topic-title">${t.label}</span><span class="topic-note">${notes[key]}</span><span class="tile-check">${icon("check")}</span></label>`).join("")}</div></fieldset>
+          <div class="question-fields" ${choosingTopic ? "hidden" : ""}>
+            <div class="selected-topic"><span>${icons[f.topic] || icons.umum} ${topic.label}</span><button type="button" class="text-button" data-action="custom-question">${state.customQuestion ? "Pilih pertanyaan" : "Tulis sendiri"}</button></div>
+            <div class="question-templates" id="questionTemplates" role="group" aria-label="Pilih satu pertanyaan" ${state.customQuestion ? "hidden" : ""}>${templates.map(q => `<button type="button" class="template-chip ${f.question === q ? "active" : ""}" aria-pressed="${f.question === q}" data-action="use-template" data-question="${esc(q)}"><span class="chip-star">${f.question === q ? icon("check") : ""}</span><span class="chip-text">${esc(q)}</span></button>`).join("")}</div>
+            <div class="question-field" ${state.customQuestion ? "" : "hidden"}><label class="input-label" for="question">Yang ingin kamu ceritakan</label><textarea id="question" name="question" maxlength="280" rows="3" placeholder="${esc(topic.question)}">${esc(f.question)}</textarea><p class="field-hint">Nggak harus rapi. Tulis yang paling mengganjal.</p></div>
           </div>
-        </fieldset>
-
-        <div class="question-templates-wrapper">
-          <p class="input-label" id="questionsLabel">Pilih satu pertanyaan</p>
-          <div class="question-templates" id="questionTemplates" role="group" aria-labelledby="questionsLabel">
-            ${templates
-              .map(
-                (q) =>
-                  `<button type="button" class="template-chip ${f.question === q ? "active" : ""}" aria-pressed="${f.question === q}" data-action="use-template" data-question="${esc(q)}">
-                    <span class="chip-star" aria-hidden="true">${f.question === q ? "●" : "○"}</span>
-                    <span class="chip-text">${esc(q)}</span>
-                  </button>`,
-              )
-              .join("")}
-          </div>
-        </div>
-
-        <details class="question-field">
-          <summary>Atau tulis pertanyaanmu sendiri <span aria-hidden="true">＋</span></summary>
-          <label class="input-label" for="question">Pertanyaanmu</label>
-          <textarea id="question" name="question" maxlength="280" rows="2" placeholder="${esc(currentTopic.question)}">${esc(f.question)}</textarea>
-          <p class="field-hint">Tidak dikirim ke pembaca suara. Tetap di perangkatmu.</p>
-        </details>
-
-        <div class="spread-indicator-card">
           <input type="hidden" name="count" value="3">
-          <div class="spread-header">
-            <span class="spread-icon" aria-hidden="true">▯▯▯</span>
-            <div>
-              <strong>Satu cerita, tiga kartu.</strong>
-              <small>Masa lalu · Masa kini · Masa depan</small>
-            </div>
-          </div>
         </div>
-      </div>
-
-      <div class="screen-actions">
-        <button type="submit" class="button primary">Kocok kartuku ${arrow}</button>
-      </div>
-    </form>`,
-    "setup-screen",
-  );
-}
-
-function presence() {
-  return `<div class="reader-presence"><picture><source media="(max-width: 699px)" srcset="/assets/presence-mobile.webp"><img src="/assets/presence.webp" width="840" height="577" alt="Sela duduk di seberang meja, siap membacakan kartumu" fetchpriority="high"></picture><span class="reader-name">Sela <small>pembaca virtual</small></span><span class="candle-glow" aria-hidden="true"></span></div>`;
+        <div class="screen-actions"><p class="spread-note">${icon("cards")} Akar cerita · Yang dihadapi · Langkah berikutnya</p>${choosingTopic ? `<button type="button" class="button primary" data-action="setup-next" ${f.topic ? "" : "disabled"}>${f.topic ? "Pilih pertanyaan" : "Pilih topik dulu"} ${arrow}</button>` : `<button type="submit" class="button primary">Kocok kartuku ${icon("shuffle")}</button>`}</div>
+      </form>
+    </div>`, "setup-screen");
 }
 
 function pickComment(selectedCount) {
-  if (selectedCount === 1)
-    return "Wah, satu kartu pertama sudah kamu tarik... ini yang akan menceritakan akar dari pertanyaanmu.";
-  if (selectedCount === 2)
-    return "Hmm... dua kartu. Kartu ini yang menangkap apa yang sedang bergejolak di dalam dirimu sekarang. Tinggal satu lagi.";
-  if (selectedCount >= 3)
-    return "Emmm... Tiga kartu sudah lengkap di atas meja kain. Tarik nafas dalam-dalam... kalau kamu sudah siap, yuk kita buka satu per satu.";
-  return "Emmm... kartunya sudah aku sebar di atas meja kain. Nggak perlu ditebak pakai logika... ikuti getaran atau tarikan jemarimu. Ambil tiga kartu yang memanggilmu.";
+  return getClipText(cue(`PILIH-${Math.min(selectedCount, 3)}`));
 }
 
 function pick() {
@@ -334,10 +297,9 @@ function pick() {
     ready = r.selected.length === 3;
   return page(
     `
-    <div class="session-heading"><span class="session-step">PILIH KARTU</span><h1 tabindex="-1">Pilih tiga kartu.</h1><span id="selectionCount" role="status">${r.selected.length} / 3</span><button class="reshuffle" data-action="${r.selected.length ? "reset-picks" : "shuffle"}" aria-label="${r.selected.length ? "Pilih ulang kartu" : "Kocok ulang kartu"}"><span aria-hidden="true">↻</span></button></div>
+    <div class="session-heading"><span class="session-step">IKUTI RASAMU</span><h1 tabindex="-1">Pilih tiga kartu.</h1><span id="selectionCount" role="status">${r.selected.length} / 3</span><button class="reshuffle icon-button" data-action="${r.selected.length ? "reset-picks" : "shuffle"}" aria-label="${r.selected.length ? "Pilih ulang kartu" : "Kocok ulang kartu"}">${icon("shuffle")}</button></div>
     <div class="tarot-room">
-      ${presence()}
-      <div class="cloth-table pick-table">
+      <div class="cloth-table pick-table table-stage ${ready ? "ready" : ""}" data-table-region>
         <div class="spread-slots-bar" aria-label="Slot kartu bacaan">
           ${positions()
             .map(
@@ -357,10 +319,9 @@ function pick() {
         <div class="shuffle-stack" aria-hidden="true"><span>${art("back")}</span><span>${art("back")}</span><span>${art("back")}</span></div>
       </div>
     </div>
-    <p class="table-conversation" role="status"><span>Sela</span><span class="conversation-text" id="pickSpeech">${esc(state.pickNotice || pickComment(r.selected.length))}</span></p>
-    <div class="screen-actions">
+    <div class="room-bottom"><div class="caption-heading"><span class="speaker-name">Sela</span><span class="cue-status" role="status"></span></div>${captionMarkup(state.pickIntro ? getClipText(state.pickIntro) : state.pickNotice || pickComment(r.selected.length))}<div class="screen-actions">
       <button class="button primary" data-action="start-reading" ${ready ? "" : "disabled"}>${ready ? "Mulai bacaan" : `Pilih ${3 - r.selected.length} kartu lagi`} ${arrow}</button>
-    </div>`,
+    </div></div>`,
     "pick-screen immersive-screen",
   );
 }
@@ -374,18 +335,23 @@ async function animateChoice(button, slot) {
     return;
   const from = button.getBoundingClientRect(),
     to = slot.getBoundingClientRect();
+  if (!from.width || !to.width) return;
+  const width = button.offsetWidth || from.width;
+  const height = button.offsetHeight || from.height;
+  const left = from.left + (from.width - width) / 2;
+  const top = from.top + (from.height - height) / 2;
   const card = button.querySelector("img").cloneNode(true);
   card.className = "travelling-card";
   Object.assign(card.style, {
-    left: from.left + "px",
-    top: from.top + "px",
-    width: from.width + "px",
-    height: from.height + "px",
+    left: left + "px",
+    top: top + "px",
+    width: width + "px",
+    height: height + "px",
   });
   document.body.append(card);
   button.classList.add("lifting");
-  const dx = to.left - from.left,
-    dy = to.top - from.top;
+  const dx = to.left - left,
+    dy = to.top - top;
   try {
     await card.animate(
       [
@@ -394,12 +360,12 @@ async function animateChoice(button, slot) {
           filter: "drop-shadow(0 5px 4px #0005)",
         },
         {
-          transform: `translate(${dx * 0.45}px,${dy * 0.45 - 35}px) rotate(-9deg) scale(1.08)`,
+          transform: `translate(${dx * 0.45}px,${dy * 0.45}px) scale(${1 + (to.width / width - 1) * 0.45},${1 + (to.height / height - 1) * 0.45})`,
           offset: 0.42,
           filter: "drop-shadow(0 20px 12px #0007)",
         },
         {
-          transform: `translate(${dx}px,${dy}px) scale(${to.width / from.width},${to.height / from.height})`,
+          transform: `translate(${dx}px,${dy}px) scale(${to.width / width},${to.height / height})`,
           filter: "drop-shadow(0 4px 3px #0005)",
         },
       ],
@@ -410,73 +376,57 @@ async function animateChoice(button, slot) {
   }
 }
 
-function animateShuffle() {
-  const grid = main.querySelector(".pick-grid"),
-    stack = main.querySelector(".shuffle-stack");
+async function animateShuffle() {
+  const grid = main.querySelector(".pick-grid"), stack = main.querySelector(".shuffle-stack");
   if (!grid || !state.dealing) return;
-  state.dealing = false;
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches || !grid.children[0]?.animate) {
+    state.dealing = false;
     grid.classList.remove("dealing");
     return;
   }
   stack.classList.add("shuffling");
-  const cards = [...grid.children];
   const center = grid.getBoundingClientRect();
-  cards.forEach((card, i) => {
+  const animations = [...grid.children].map((card, i) => {
     const rect = card.getBoundingClientRect();
     const dx = center.left + center.width / 2 - rect.left - rect.width / 2;
-    card.animate(
-      [
-        {
-          opacity: 0,
-          transform: `translate(${dx}px,35px) rotate(0deg) scale(.86)`,
-        },
-        {
-          opacity: 1,
-          transform: `translate(${dx}px,35px) rotate(0deg) scale(.86)`,
-          offset: 0.2,
-        },
-        { opacity: 1, transform: `translate(0,0) rotate(${(i - 3) * 4}deg)` },
-      ],
-      {
-        duration: 650,
-        delay: 950 + i * 65,
-        easing: "cubic-bezier(.16,.65,.28,1)",
-        fill: "backwards",
-      },
-    );
+    return card.animate([
+      { opacity: 0, transform: `translate(${dx}px,6px) rotate(0deg) scale(.9)` },
+      { opacity: 1, transform: `translate(${dx}px,6px) rotate(0deg) scale(.9)`, offset: .2 },
+      { opacity: 1, transform: `rotate(${(i - 3) * 4}deg)` },
+    ], { duration: 480, delay: 180 + i * 45, easing: "cubic-bezier(.16,.65,.28,1)", fill: "backwards" });
   });
-  setTimeout(() => {
-    if (grid.isConnected) {
-      stack.classList.remove("shuffling");
-      grid.classList.remove("dealing");
-      sfx("fan");
-    }
-  }, 980);
+  await Promise.allSettled(animations.map(animation => animation.finished));
+  if (grid.isConnected) {
+    state.dealing = false;
+    stack.classList.remove("shuffling");
+    grid.classList.remove("dealing");
+    sfx("fan");
+  }
 }
 
 function explanation(card, { scope = "modal", tab = "makna" } = {}) {
   const key = `${scope}-${card.id}`;
-  return `<div class="card-explanation"><div class="meaning-tabs" role="tablist" aria-label="Penjelasan kartu">${[
-    ["makna", "Makna"],
-    ["gambar", "Simbol"],
-    ["langkah", "Langkah"],
-    ["refleksi", "Refleksi"],
-  ]
-    .map(
-      ([id, label]) =>
-        `<button type="button" role="tab" id="${key}-tab-${id}" class="meaning-tab" data-action="meaning-tab" data-tab="${id}" aria-controls="${key}-panel-${id}" aria-selected="${tab === id}" tabindex="${tab === id ? 0 : -1}">${label}</button>`,
-    )
-    .join("")}</div>
-    <section class="meaning-panel" role="tabpanel" tabindex="0" id="${key}-panel-makna" data-panel="makna" aria-labelledby="${key}-tab-makna" ${tab === "makna" ? "" : "hidden"}><p>${esc(card.meaning)}</p></section>
-    <section class="meaning-panel" role="tabpanel" tabindex="0" id="${key}-panel-gambar" data-panel="gambar" aria-labelledby="${key}-tab-gambar" ${tab === "gambar" ? "" : "hidden"}><ul>${card.symbols.map((s) => `<li>${esc(s)}</li>`).join("")}</ul></section>
-    <section class="meaning-panel" role="tabpanel" tabindex="0" id="${key}-panel-langkah" data-panel="langkah" aria-labelledby="${key}-tab-langkah" ${tab === "langkah" ? "" : "hidden"}><p class="action-copy">${esc(card.action)}</p></section>
-    <section class="meaning-panel" role="tabpanel" tabindex="0" id="${key}-panel-refleksi" data-panel="refleksi" aria-labelledby="${key}-tab-refleksi" ${tab === "refleksi" ? "" : "hidden"}><p class="reflection-copy">${esc(card.prompt)}</p></section></div>`;
+  const content = {
+    makna: `<p>${esc(card.meaning)}</p>`,
+    gambar: `<ul>${card.symbols.map(symbol => `<li>${esc(symbol)}</li>`).join("")}</ul>`,
+    langkah: `<p>${esc(card.action)}</p>`,
+    refleksi: `<p>${esc(card.prompt)}</p>`,
+  };
+  return `<div class="card-explanation"><div class="meaning-tabs" role="tablist" aria-label="Penjelasan kartu">${[["makna", "Makna"], ["gambar", "Simbol"], ["langkah", "Langkah"], ["refleksi", "Refleksi"]].map(([id, label]) => `<button type="button" role="tab" id="${key}-tab-${id}" class="meaning-tab" data-action="meaning-tab" data-tab="${id}" aria-controls="${key}-panel-${id}" aria-selected="${tab === id}" tabindex="${tab === id ? 0 : -1}">${label}</button>`).join("")}</div>${Object.entries(content).map(([id, html]) => `<section class="meaning-panel" role="tabpanel" tabindex="0" id="${key}-panel-${id}" data-panel="${id}" aria-labelledby="${key}-tab-${id}" ${tab === id ? "" : "hidden"}>${html}</section>`).join("")}</div>`;
 }
 
 function activateMeaningTab(button) {
   const group = button.closest(".card-explanation");
   if (!group) return;
+  if (state.modalMode === "detail") {
+    state.typingJob++;
+    narrator.stop();
+    const listen = modal.querySelector('[data-action="detail-listen"]');
+    if (listen) {
+      listen.setAttribute("aria-pressed", "false");
+      listen.innerHTML = `${icon("sound")} Dengar penjelasan Sela`;
+    }
+  }
   group.querySelectorAll('[role="tab"]').forEach((t) => {
     const on = t === button;
     t.setAttribute("aria-selected", String(on));
@@ -488,58 +438,88 @@ function activateMeaningTab(button) {
   });
 }
 
+function storyOptions(card, bridge = true) {
+  const position = Math.max(0, state.reading?.selected.indexOf(card.id) ?? 0);
+  const bridgeId = cue(`BR-${position + 1}-${card.suit}`);
+  return { position, bridge, variant: bridgeId?.split("-").at(-1) || "a" };
+}
+
 function storyLines(card, chapter) {
-  const position = state.reading?.selected
-    ? state.reading.selected.indexOf(card.id)
-    : undefined;
-  return cardStory(card, chapter, state.passageLimit, {
-    position: position >= 0 ? position : (state.reading?.current ?? 0),
-    topic: state.reading?.topic,
-    question: state.reading?.question,
-  });
+  return cardStory(card, chapter, 190, storyOptions(card));
 }
 
 function dialogueFor(card) {
-  if (state.dialogue.id !== card.id)
-    state.dialogue = { id: card.id, chapter: "makna", line: 0 };
+  if (state.dialogue.id !== card.id) state.dialogue = { id: card.id, chapter: "makna", line: 0 };
   const story = storyLines(card, state.dialogue.chapter);
   state.dialogue.line = Math.min(state.dialogue.line, story.length - 1);
   return { story, text: story[state.dialogue.line] };
 }
 
+function currentClip(card) {
+  dialogueFor(card);
+  return getCardClips(card, state.dialogue.chapter, storyOptions(card))[state.dialogue.line];
+}
+
+function storyNextLabel() {
+  return state.reading.current === 2 ? "Lihat tiga kartuku" : "Kartu berikutnya";
+}
+
+function nextCard() {
+  const r = state.reading;
+  if (!r || r.finished || !r.revealed.includes(r.selected[r.current])) return;
+  clearTimeout(state.dialogueTimer);
+  state.typingJob++;
+  narrator.stop();
+  state.readingExpanded = false;
+  if (r.current < 2) { r.current++; sfx("next"); }
+  else if (readingComplete(r)) { r.finished = true; sfx("complete"); }
+  render();
+}
+
 function dialogue(card) {
   const { text } = dialogueFor(card);
-  return `<div class="dialogue-box"><div class="dialogue-speaker"><span class="speaker-name">Sela</span><span class="voice-status" id="voiceStatus" role="status"></span><button class="text-button pause-reading" data-action="auto-read" aria-pressed="${state.autoRead}">${state.autoRead ? "Ⅱ Jeda" : "▷ Lanjut"}</button></div><section class="dialogue-bubble" id="storyPanel" aria-label="Bacaan Sela"><p class="dialogue-text" data-text="${esc(text)}">${esc(text)}</p></section></div>`;
+  return `<div class="room-bottom reading-bottom"><div class="caption-heading"><span class="speaker-name">Sela <small class="chapter-label">${chapterLabels[state.dialogue.chapter]}</small></span><span class="voice-status" role="status"></span><button type="button" class="icon-button pause-reading" data-action="auto-read" aria-pressed="${state.autoRead}" aria-label="${state.autoRead ? "Jeda narasi" : "Lanjutkan narasi"}">${icon(state.autoRead ? "pause" : "play")}</button></div>${captionMarkup(text)}<button class="button primary" id="storyNext" data-action="next-card">${storyNextLabel(card)} ${arrow}</button></div>`;
+}
+
+function readingModal(card) {
+  const position = state.reading.selected.indexOf(card.id);
+  const currentCard = BY_ID[state.reading.selected[state.reading.current]];
+  state.modalMode = "reading";
+  state.readingExpanded = true;
+  state.detailCard = card.id;
+  openModal(card.name, `${cardHero(card, positions()[position].name)}${explanation(card)}<div class="card-dialog-footer"><div class="caption-heading"><span class="speaker-name">Sela</span><span class="voice-status" role="status"></span><button type="button" class="icon-button" data-action="replay-line" aria-label="Ulang narasi bagian ini">${icon("replay")}</button><button type="button" class="icon-button pause-reading" data-action="auto-read" aria-pressed="${state.autoRead}">${icon(state.autoRead ? "pause" : "play")}</button></div>${captionMarkup(dialogueFor(currentCard).text)}<button type="button" class="button primary" id="modalStoryNext" data-action="next-card">${storyNextLabel(currentCard)} ${arrow}</button></div>`, "card-dialog reading-dialog", { preserveNarration: true });
+  syncReadingUI();
+  drawCaption(true);
+}
+
+function syncReadingUI() {
+  const r = state.reading;
+  if (!r || r.finished) return;
+  const card = BY_ID[r.selected[r.current]];
+  if (!r.revealed.includes(card?.id)) return;
+  dialogueFor(card);
+  document.querySelectorAll(".chapter-label").forEach(node => node.textContent = chapterLabels[state.dialogue.chapter]);
+  document.querySelectorAll('[data-action="auto-read"]').forEach(button => {
+    button.setAttribute("aria-pressed", String(state.autoRead));
+    button.setAttribute("aria-label", state.autoRead ? "Jeda narasi" : "Lanjutkan narasi");
+    button.innerHTML = icon(state.autoRead ? "pause" : "play");
+  });
+  for (const selector of ["#storyNext", "#modalStoryNext"]) {
+    const button = document.querySelector(selector);
+    if (button) button.innerHTML = `${storyNextLabel(card)} ${arrow}`;
+  }
 }
 
 function reader() {
   const r = state.reading;
   if (r.finished) return summary();
-  const id = r.selected[r.current],
-    c = BY_ID[id],
-    opened = r.revealed.includes(id);
-  const story = opened ? dialogueFor(c).story : [],
-    more =
-      opened &&
-      (state.dialogue.line < story.length - 1 ||
-        nextChapter(state.dialogue.chapter));
-  return page(
-    `<div class="session-heading"><span class="session-step">${positions()[r.current].name.toUpperCase()} · ${r.current + 1}/3</span><h1 tabindex="-1">${opened ? c.name : ["Buka kartu pertama.", "Buka kartu kedua.", "Buka kartu terakhir."][r.current]}</h1></div>
-    <div class="tarot-room">${presence()}<div class="cloth-table reading-table"><div class="physical-spread" aria-label="Tiga kartu bacaanmu">${r.selected
-      .map((cid, i) => {
-        const revealed = r.revealed.includes(cid),
-          current = i === r.current;
-        return `<div class="physical-slot ${current ? "current" : ""}" style="--tilt:${[-6, 2, 7][i]}deg">
-        ${current ? `<button class="flip-card ${opened ? "is-open" : ""}" id="flipCard" data-action="${opened ? "card-detail" : "reveal"}" data-id="${cid}" aria-label="${opened ? "Lihat " + esc(c.name) + " lebih dekat" : "Buka kartu ini"}"><span class="flip-inner"><span class="flip-face flip-back" ${opened ? 'aria-hidden="true"' : ""}>${art("back")}</span><span class="flip-face flip-front" ${opened ? "" : 'aria-hidden="true"'}>${art(cid)}</span></span></button>` : `<span class="resting-card">${art(revealed ? cid : "back")}</span>`}
-        <span class="physical-label">${positions()[i].name}</span></div>`;
-      })
-      .join(
-        "",
-      )}</div>${opened ? `<p class="card-keywords">${c.keywords}</p>` : '<p class="tap-hint">Sentuh kartu yang paling besar</p>'}</div></div>
-    ${opened ? dialogue(c) : `<p class="table-conversation"><span>Sela</span><span class="conversation-text">${["Emmm... kita mulai dari kartu pertama. Akar dari ceritamu. Sentuh kartunya saat kamu siap mendengarkan.", "Hmm... sekarang kartu kedua... yang menangkap dinamika dan apa yang sedang bergejolak di batinmu. Buka kartunya pelan-pelan.", "Dan kartu terakhir... arah lentera untuk langkahmu ke depan. Buka saat hatimu siap."][r.current]}</span></p>`}
-    <div class="screen-actions"><button class="button primary" id="storyNext" data-action="${opened ? "story-next" : "reveal"}">${opened ? (more ? "Lanjut" : r.current === 2 ? "Lihat tiga kartuku" : "Kartu berikutnya") : "Buka kartu"} ${arrow}</button></div>`,
-    "reader-screen immersive-screen",
-  );
+  const c = BY_ID[r.selected[r.current]], opened = r.revealed.includes(c.id);
+  return page(`<div class="session-heading"><span class="session-step">${positions()[r.current].label.toUpperCase()} · ${r.current + 1}/3</span><h1 tabindex="-1">${opened ? esc(c.name) : ["Buka kartu pertama.", "Buka kartu kedua.", "Buka kartu terakhir."][r.current]}</h1></div>
+    <div class="tarot-room"><div class="cloth-table reading-table table-stage" data-table-region><div class="physical-spread" aria-label="Tiga kartu bacaanmu">${r.selected.map((id, i) => {
+      const revealed = r.revealed.includes(id), current = i === r.current;
+      return `<div class="physical-slot ${current ? "current" : ""}"><button type="button" class="flip-card ${revealed ? "is-open" : ""}" ${current ? 'id="flipCard"' : ""} data-action="${revealed ? "card-detail" : current ? "reveal" : ""}" data-id="${id}" aria-label="${revealed ? "Makna " + esc(BY_ID[id].name) : current ? "Buka kartu ini" : "Kartu ini belum dibuka"}" ${!current && !revealed ? "disabled" : ""}><span class="flip-inner"><span class="flip-face flip-back" ${revealed ? 'aria-hidden="true"' : ""}>${art("back")}</span><span class="flip-face flip-front" ${revealed ? "" : 'aria-hidden="true"'}>${art(id)}</span></span></button><span class="physical-label">${positions()[i].name}</span></div>`;
+    }).join("")}</div></div></div>
+    ${opened ? dialogue(c) : `<div class="room-bottom reading-bottom"><div class="caption-heading"><span class="speaker-name">Sela</span><span class="cue-status" role="status"></span></div>${captionMarkup(getClipText(state.preIntro || cue(`PRE-${r.current + 1}`)))}<button class="button primary" id="storyNext" data-action="reveal">Buka kartu ${arrow}</button></div>`}`, "reader-screen immersive-screen");
 }
 
 async function animateReveal() {
@@ -559,7 +539,7 @@ async function animateReveal() {
         filter: "drop-shadow(0 4px 3px #0004)",
       },
       {
-        transform: "rotateY(65deg) translateY(-16px) scale(1.06)",
+        transform: "rotateY(65deg) translateY(-6px) scale(1.025)",
         offset: 0.38,
         filter: "drop-shadow(0 18px 8px #0008)",
       },
@@ -576,136 +556,172 @@ async function animateReveal() {
   ).finished;
 }
 
-function finishTyping() {
-  clearTimeout(state.typeTimer);
-  const p = main.querySelector(".dialogue-text");
-  if (p) {
-    p.textContent = p.dataset.text;
-    p.closest(".dialogue-bubble")?.classList.remove("typing");
-  }
-  state.typing = false;
-  const next = main.querySelector("#storyNext");
-  if (next?.dataset.readyLabel) next.innerHTML = next.dataset.readyLabel;
-  const cue = main.querySelector(".dialogue-cue");
-  if (cue) cue.hidden = true;
-}
-
 function startDialogue() {
-  clearTimeout(state.typeTimer);
   clearTimeout(state.dialogueTimer);
-  const p = main.querySelector(".dialogue-text");
-  if (!p) return;
-  const text = p.dataset.text;
-  finishTyping();
+  const r = state.reading;
+  if (!r || r.finished || state.modalPaused) return;
+  const card = BY_ID[r.selected[r.current]];
+  if (!r.revealed.includes(card?.id)) return;
+  const { text } = dialogueFor(card);
+  const id = currentClip(card);
+  syncReadingUI();
   const job = ++state.typingJob;
-  const complete = () => {
-    if (
-      job !== state.typingJob ||
-      state.route !== "baca" ||
-      modal.open ||
-      document.hidden
-    )
-      return;
-    finishTyping();
-    if (!state.autoRead) return;
-    const card = BY_ID[state.reading.selected[state.reading.current]];
-    const more =
-      state.dialogue.line <
-        storyLines(card, state.dialogue.chapter).length - 1 ||
-      nextChapter(state.dialogue.chapter);
-    if (more) state.dialogueTimer = setTimeout(() => advanceStory(), 850);
+  beginCaption(id, text, job, !state.narration || !audioEnabled());
+  const complete = (result = {}) => {
+    finishCaption(job, result);
+    if (job !== state.typingJob || state.route !== "baca" || document.hidden || state.modalPaused || !state.autoRead) return;
+    const more = state.dialogue.line < storyLines(card, state.dialogue.chapter).length - 1 || nextChapter(state.dialogue.chapter);
+    if (more) state.dialogueTimer = setTimeout(() => {
+      if (job === state.typingJob) advanceStory();
+    }, result.audio === false ? Math.max(6500, text.split(/\s+/).length * 330) : 1100);
   };
-  if (state.voiceAvailable && state.narration && audioEnabled()) {
-    const status = main.querySelector("#voiceStatus");
-    const card = BY_ID[state.reading.selected[state.reading.current]];
-    narrator
-      .speak(
-        text,
-        card.name,
-        (value, speaking = false) => {
-          if (status?.isConnected) {
-            status.textContent = speaking
-              ? "Sedang membaca"
-              : value
-                ? value.startsWith("Menyiapkan")
-                  ? "Sebentar…"
-                  : "Suara belum tersedia"
-                : "";
-            status.dataset.mode = narrator.mode;
-            main
-              .querySelector(".dialogue-speaker")
-              ?.classList.toggle("speaking", speaking);
-          }
-        },
-        complete,
-      )
-      .catch(() => {
-        if (status?.isConnected)
-          status.textContent = "Suara belum tersedia. Gunakan tombol lanjut.";
-      });
-    const chapter = state.dialogue.chapter;
-    const lines = storyLines(card, chapter);
-    const nextLine =
-      lines[state.dialogue.line + 1] ||
-      (nextChapter(chapter) && storyLines(card, nextChapter(chapter))[0]);
-    if (nextLine) narrator.prepare(nextLine, card.name);
-    else {
-      const following =
-        BY_ID[state.reading.selected[state.reading.current + 1]];
-      if (following)
-        narrator.prepare(storyLines(following, "makna")[0], following.name);
-    }
-  } else if (state.autoRead) {
-    state.dialogueTimer = setTimeout(
-      complete,
-      Math.max(6500, text.split(/\s+/).length * 330),
-    );
-  }
+  if (state.narration && audioEnabled() && state.voiceAvailable && state.autoRead) {
+    narrator.speak(id, card.name, (value, speaking) => {
+      if (job !== state.typingJob) return;
+      document.querySelectorAll(".voice-status").forEach(node => node.textContent = speaking ? "Sela sedang membaca" : value);
+      document.querySelectorAll(".caption-heading").forEach(node => node.classList.toggle("speaking", speaking));
+    }, complete).catch(() => {
+      document.querySelectorAll(".voice-status").forEach(node => node.textContent = "Suara belum tersedia. Teks tetap bisa dibaca.");
+    });
+    const script = readingScript(card, storyOptions(card));
+    const index = script.findIndex(line => line.id === id);
+    if (script[index + 1]) narrator.prepare(script[index + 1].id, card.name);
+  } else if (state.autoRead) complete({ audio: false });
 }
 
 function advanceStory() {
-  const c = BY_ID[state.reading.selected[state.reading.current]];
-  const story = storyLines(c, state.dialogue.chapter);
-  if (state.typing) {
-    finishTyping();
-    return;
-  }
+  const r = state.reading;
+  if (!r || r.finished || !r.revealed.includes(r.selected[r.current])) return;
+  const card = BY_ID[r.selected[r.current]];
+  const story = storyLines(card, state.dialogue.chapter);
   clearTimeout(state.dialogueTimer);
+  state.typingJob++;
   narrator.stop();
   if (state.dialogue.line < story.length - 1) {
     state.dialogue.line++;
-    render({ focus: false });
+    startDialogue();
   } else if (nextChapter(state.dialogue.chapter)) {
     state.dialogue.chapter = nextChapter(state.dialogue.chapter);
     state.dialogue.line = 0;
-    render({ focus: false });
+    startDialogue();
   } else {
-    const r = state.reading;
-    if (r.current < r.count - 1) {
-      r.current++;
-      sfx("next");
-      render();
-    } else if (readingComplete(r)) {
-      sfx("complete");
-      r.finished = true;
-      render();
-    }
+    state.readingExpanded = false;
+    if (r.current < r.count - 1) { r.current++; sfx("next"); }
+    else if (readingComplete(r)) { r.finished = true; sfx("complete"); }
+    render();
   }
 }
 
 function summary() {
   const r = state.reading;
-  return page(
-    `${heading("TIGA KARTU TERBUKA", "Bacaanmu selesai.")}
-    <div class="result-cards">${r.selected.map((id, i) => `<button class="result-card" data-action="card-detail" data-id="${id}" aria-label="Baca lagi ${esc(BY_ID[id].name)}"><span class="result-position">${positions()[i].name}</span>${art(id)}<strong>${BY_ID[id].name}</strong></button>`).join("")}</div>
-    ${question(r)}
-    <div class="summary-speech">
-      <span class="speaker-name"><span aria-hidden="true">✦</span> Sela</span>
-      <p>“Emmm... Tiga kartu sudah selesai bercerita untukmu hari ini. Ingat, kartu bukan vonis masa depan—kartu adalah cermin agar kamu bisa melihat dirimu dengan lebih jujur dan lembut. Ambil bagian yang beresonansi, dan lepaskan yang tidak.”</p>
-    </div>
-    <div class="screen-actions"><button class="button primary" data-action="new">Mulai bacaan baru ${arrow}</button><button class="text-button" data-action="read-again">Baca kartu ini lagi</button></div>`,
-    "reading-result",
-  );
+  const closing = [cue(`PENUTUP-${r.topic}`), cue("PENUTUP-UMUM")];
+  const photo = prepareShareResult(r);
+  return page(`${heading("CERITAMU HARI INI", "Bacaanmu selesai.")}
+    <div class="result-cards">${r.selected.map((id, i) => `<button type="button" class="result-card" data-action="card-detail" data-id="${id}" aria-label="Baca lagi ${esc(BY_ID[id].name)}"><span class="result-position">${positions()[i].label}</span>${art(id)}<strong>${esc(BY_ID[id].name)}</strong></button>`).join("")}</div>
+    ${question(r)}<div class="summary-speech"><span class="speaker-name">Sela</span>${closing.map(id => `<p data-closing-clip="${id}">${esc(getClipText(id))}</p>`).join("")}<span class="cue-status" role="status"></span></div>
+    <div class="room-bottom result-bottom"><div class="caption-heading"><span class="speaker-name">Sela</span><span class="cue-status" role="status"></span></div>${captionMarkup(getClipText(closing[0]))}<div class="result-actions"><button type="button" class="button primary" id="shareResultButton" data-action="share-result" aria-busy="${!photo?.blob}" ${photo?.blob ? "" : "disabled"}>${icon("share")} ${photo?.blob ? "Bagikan hasil" : "Menyiapkan…"}</button><button type="button" class="icon-button" data-action="read-again" aria-label="Putar ulang bacaan tiga kartu ini" title="Putar ulang bacaan ini">${icon("replay")}</button><button type="button" class="icon-button" data-action="new" aria-label="Mulai bacaan baru, pilih topik lagi" title="Bacaan baru">${icon("spark")}</button></div></div>`, "reading-result");
+}
+
+function resetShareResult() {
+  if (state.shareResult?.url) URL.revokeObjectURL(state.shareResult.url);
+  state.shareResult = null;
+}
+
+function updateShareResultButton() {
+  const button = document.getElementById("shareResultButton");
+  if (!button || state.route !== "baca" || !state.reading?.finished) return;
+  const preparing = !!state.shareResult && !state.shareResult.blob;
+  button.disabled = preparing;
+  button.setAttribute("aria-busy", String(preparing));
+  button.innerHTML = `${icon("share")} ${preparing ? "Menyiapkan…" : "Bagikan hasil"}`;
+}
+
+function prepareShareResult(r) {
+  if (!r?.finished || !readingComplete(r)) return null;
+  const key = r.selected.join(",") + websiteURL();
+  if (state.shareResult?.key === key) return state.shareResult;
+  resetShareResult();
+  const entry = { key, ids: [...r.selected], blob: null, url: null };
+  state.shareResult = entry;
+  entry.ready = createShareImage(entry.ids).then(blob => {
+    if (state.shareResult === entry) {
+      entry.blob = blob; entry.url = URL.createObjectURL(blob);
+      updateShareResultButton();
+    }
+    return entry;
+  }).catch(error => {
+    if (state.shareResult === entry) { state.shareResult = null; updateShareResultButton(); }
+    throw error;
+  });
+  entry.ready.catch(() => {}); // A later click can retry a failed preparation.
+  return entry;
+}
+
+async function shareReadingResult(button) {
+  const r = state.reading;
+  const entry = prepareShareResult(r);
+  if (!entry) return;
+  if (!entry.blob || !canSharePhoto(entry.blob)) {
+    await openShareResult(button);
+    return;
+  }
+  button.disabled = true;
+  try {
+    // The photo is already rendered, so sharing starts in this tap's activation.
+    if (!(await sharePhoto(entry.blob, entry.ids)) && state.reading === r) await openShareResult(button, true);
+  } finally { button.disabled = false; }
+}
+
+async function openShareResult(button, failed = false) {
+  const r = state.reading;
+  const entry = prepareShareResult(r);
+  if (!entry) return;
+  button.disabled = true;
+  const original = button.innerHTML;
+  button.innerHTML = `${icon("share")} Menyiapkan foto…`;
+  try {
+    await entry.ready;
+    if (state.reading !== r || !r.finished || !entry.url) return;
+    const native = canSharePhoto(entry.blob);
+    const message = native ? (failed ? "Menu berbagi belum terbuka. Coba sekali lagi." : "Pilih WhatsApp, Instagram, atau aplikasi lain di menu berbagi HP.") : "Browser ini belum mendukung berbagi foto langsung. Buka situs ini di browser HP yang mendukung menu berbagi foto. Kamu tetap bisa kirim ajakan ke WhatsApp dari sini.";
+    const whatsapp = "https://wa.me/?text=" + encodeURIComponent(shareInvitation(entry.ids));
+    state.modalMode = "share";
+    openModal("Bagikan bacaanku.", `<img class="share-preview" src="${entry.url}" alt="Hasil tiga kartu: ${entry.ids.map(id => esc(BY_ID[id].name)).join(", ")}, dengan ajakan membaca tarot"><p class="share-caption">${message}</p><a class="share-site" href="${esc(websiteURL())}" target="_blank" rel="noopener">${esc(websiteURL())}</a><div class="share-actions">${native ? `<button type="button" class="button primary" data-action="share-photo">${icon("share")} Pilih aplikasi</button>` : `<a class="button primary" href="${esc(whatsapp)}" target="_blank" rel="noopener">${icon("share")} Kirim ajakan ke WhatsApp</a>`}<button type="button" class="text-button" data-action="download-photo">${icon("download")} Simpan foto</button><button type="button" class="text-button" data-action="copy-invitation">${icon("copy")} Salin ajakan</button></div><textarea class="share-invitation" id="shareInvitation" readonly rows="3" aria-label="Teks ajakan untuk dibagikan">${esc(shareInvitation(entry.ids))}</textarea>`, "share-dialog", { preserveNarration: true });
+  } finally {
+    button.disabled = false;
+    button.innerHTML = original;
+  }
+}
+
+function downloadSharePhoto() {
+  const entry = state.shareResult;
+  if (!entry?.url) return;
+  const link = document.createElement("a");
+  link.href = entry.url;
+  link.download = "bacaanku-the-tarot-room.png";
+  link.click();
+}
+
+async function copyInvitation() {
+  const text = document.getElementById("shareInvitation");
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text.value);
+    toast("Ajakan sudah disalin.");
+  } catch {
+    text.focus({ preventScroll: true });
+    text.select();
+    toast(document.execCommand?.("copy") ? "Ajakan sudah disalin." : "Teks ajakan sudah dipilih. Salin untuk membagikannya.");
+  }
+}
+
+function playClosing(index = 0) {
+  const r = state.reading;
+  if (!r?.finished || state.route !== "baca") return;
+  const clips = [cue(`PENUTUP-${r.topic}`), cue("PENUTUP-UMUM")];
+  if (!clips[index]) return;
+  document.querySelectorAll("[data-closing-clip]").forEach(node => node.classList.toggle("active", node.dataset.closingClip === clips[index]));
+  speakCue(clips[index], () => playClosing(index + 1));
 }
 
 function filteredCards() {
@@ -713,103 +729,110 @@ function filteredCards() {
   return DECK.filter(
     (c) =>
       (state.filter === "all" || c.suit === state.filter) &&
-      `${c.name} ${c.indo} ${c.keywords} ${c.meaning}`
+      `${c.name} ${c.indo} ${c.keywords} ${c.meaning} ${readingScript(c, { bridge: false }).map(line => line.text).join(" ")}`
         .toLocaleLowerCase("id-ID")
         .includes(q),
   );
 }
 
 function library() {
-  return page(
-    `${heading("78 KARTU TAROT", "Koleksi Lengkap Rider-Waite.")}
-    <div class="library-toolbar">
-      <input type="search" id="cardSearch" placeholder="Cari kartu atau makna…" value="${esc(state.search)}" aria-label="Cari kartu">
-      <select id="suitFilter" aria-label="Kelompok kartu">
-        <option value="all">Semua Kelompok</option>
-        ${Object.entries(SUITS)
-          .map(
-            ([id, s]) =>
-              `<option value="${id}" ${state.filter === id ? "selected" : ""}>${s.name}</option>`,
-          )
-          .join("")}
-      </select>
-    </div>
-    <div class="library-grid" id="libraryGrid"></div>
-    <div class="pagination" id="libraryPagination" aria-label="Halaman koleksi"></div>`,
-    "library-screen",
-  );
+  return page(`<div class="library-heading"><div><p class="eyebrow">RIDER–WAITE–SMITH · 78 KARTU</p><h1 tabindex="-1">Kenali setiap cerita.</h1></div><span class="celestial-seal">${icon("cards")}</span></div>
+    <label class="library-search">${icon("search")}<input type="search" id="cardSearch" placeholder="Nama kartu atau makna…" value="${esc(state.search)}" aria-label="Cari kartu"><kbd>78</kbd></label>
+    <div class="suit-filters" role="group" aria-label="Kelompok kartu">${[["all", "Semua"], ...Object.entries(SUITS).map(([id, suit]) => [id, suit.name])].map(([id, name]) => `<button type="button" class="suit-filter" data-action="filter-suit" data-suit="${id}" aria-pressed="${state.filter === id}">${icon(id === "all" ? "cards" : id)}<span>${name}</span></button>`).join("")}</div>
+    <p class="library-info" id="libraryInfo" role="status"></p><div class="library-grid" id="libraryGrid"></div><div class="pagination" id="libraryPagination" aria-label="Halaman koleksi"></div>`, "library-screen");
 }
+
+function libraryPageSize() { return mobileHomeQuery.matches || compactLandscapeQuery.matches ? 4 : 6; }
 
 function fillLibrary() {
-  const cards = filteredCards();
-  const size = 6;
+  const cards = filteredCards(), size = libraryPageSize();
   const max = Math.max(0, Math.ceil(cards.length / size) - 1);
-  state.libraryPage = Math.min(state.libraryPage, max);
+  state.libraryPage = Math.max(0, Math.min(state.libraryPage, max));
   const start = state.libraryPage * size;
-  document.getElementById("libraryGrid").innerHTML = cards.length
-    ? cards
-        .slice(start, start + size)
-        .map(
-          (c) =>
-            `<button class="library-card" data-action="card-detail" data-id="${c.id}" aria-label="Pelajari ${esc(c.name)}">${art(c.id, 'decoding="async"')}<strong>${c.name}</strong><span>${c.indo}</span></button>`,
-        )
-        .join("")
-    : '<div class="empty-state"><span aria-hidden="true">✧</span><h2>Belum ketemu.</h2><p>Coba kata kunci atau kelompok yang lain.</p></div>';
-  document.getElementById("libraryPagination").innerHTML =
-    `<button class="icon-button" data-action="library-prev" aria-label="Halaman sebelumnya" ${state.libraryPage === 0 ? "disabled" : ""}>←</button><span role="status">${cards.length ? `${start + 1}–${Math.min(start + size, cards.length)} dari ${cards.length} kartu` : "0 kartu"}</span><button class="icon-button" data-action="library-next" aria-label="Halaman berikutnya" ${state.libraryPage === max ? "disabled" : ""}>→</button>`;
+  document.getElementById("libraryInfo").textContent = `${cards.length} kartu${state.filter === "all" ? " dalam koleksi" : " · " + SUITS[state.filter].name} · Sentuh untuk membaca`;
+  document.getElementById("libraryGrid").innerHTML = cards.length ? cards.slice(start, start + size).map(c => `<button type="button" class="library-card" data-suit="${c.suit}" data-action="card-detail" data-id="${c.id}" aria-label="Pelajari ${esc(c.name)}"><span class="library-art"><span class="card-catalog-number">${String(DECK.indexOf(c) + 1).padStart(2, "0")}</span>${art(c.id)}<span class="catalog-suit">${icon(c.suit)}</span></span><span class="library-card-copy"><strong>${esc(c.name)}</strong><span>${esc(c.indo)}</span><small>${esc(c.keywords)}</small></span></button>`).join("") : `<div class="empty-state">${icon("search")}<h2>Belum ketemu.</h2><p>Coba nama atau kelompok yang lain.</p><button type="button" class="text-button" data-action="clear-search">Lihat semua kartu</button></div>`;
+  document.getElementById("libraryPagination").innerHTML = `<button type="button" class="icon-button" data-action="library-prev" aria-label="Halaman sebelumnya" ${state.libraryPage === 0 ? "disabled" : ""}>${icon("back")}</button><span role="status">${cards.length ? `${state.libraryPage + 1} / ${max + 1}` : "0 kartu"}<small>${cards.length ? `${start + 1}–${Math.min(start + size, cards.length)} dari ${cards.length}` : "Coba pencarian lain"}</small></span><button type="button" class="icon-button" data-action="library-next" aria-label="Halaman berikutnya" ${state.libraryPage === max ? "disabled" : ""}>${arrow}</button>`;
+  document.querySelectorAll(".suit-filter").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.suit === state.filter)));
 }
 
-function closeModal() {
+function closeModal({ resume = true } = {}) {
+  const paused = state.modalPaused;
+  if (state.modalMode === "detail") { state.typingJob++; narrator.stop(); }
+  state.readingExpanded = false;
+  state.modalMode = null;
+  state.modalPaused = false;
   modal.close();
+  if (resume && paused && state.route === "baca" && state.autoRead && !narrator.resume()) startDialogue();
 }
 
-function openModal(title, content, name = "") {
-  narrator.stop();
-  clearTimeout(state.dialogueTimer);
-  state.typingJob++;
-  finishTyping();
-
+function openModal(title, content, name = "", { preserveNarration = false } = {}) {
+  if (!preserveNarration) {
+    state.modalPaused = state.route === "baca" && !state.reading?.finished;
+    state.modalMode = "detail";
+    narrator.pause();
+    clearTimeout(state.dialogueTimer);
+    state.typingJob++;
+  }
   modal.className = name;
-  document.getElementById("modalBody").innerHTML =
-    `<div class="modal-header"><h2 id="modalTitle">${title}</h2><button class="icon-button modal-close" data-action="close" aria-label="Tutup jendela">×</button></div><div class="modal-content">${content}</div>`;
+  document.getElementById("modalBody").innerHTML = `<div class="modal-header"><div><p class="eyebrow">${name === "share-dialog" ? "CERITAMU DALAM TIGA KARTU" : preserveNarration ? "MAKNA KARTU · " + (state.reading.selected.indexOf(state.detailCard) + 1) + "/3" : "DARI KOLEKSI KARTU"}</p><h2 id="modalTitle">${esc(title)}</h2></div><button type="button" class="icon-button modal-close" data-action="close" aria-label="${preserveNarration ? "Kembali ke meja, bacaan tetap berjalan" : "Tutup detail kartu"}">${icon("close")}</button></div><div class="modal-content">${content}</div>`;
   if (!modal.open) modal.showModal();
-  modal.querySelector(".modal-close").focus();
+  modal.querySelector(".modal-close")?.focus({ preventScroll: true });
 }
 
 function cardModal(id) {
-  const c = BY_ID[id];
-  if (!c) return;
-  openModal(
-    c.name,
-    `<div class="modal-card-top">${art(id)}<div><span class="pill">${SUITS[c.suit]?.name || "Arcana"}</span><h3>${c.indo}</h3><p>${c.keywords}</p></div></div>${explanation(c)}`,
-    "card-dialog",
-  );
+  if (!Object.hasOwn(BY_ID, id)) return;
+  const card = BY_ID[id], r = state.reading;
+  if (state.route === "baca" && !r?.finished && r?.revealed.includes(id)) { readingModal(card); return; }
+  state.detailCard = id;
+  openModal(card.name, `${cardHero(card)}${explanation(card)}<div class="detail-audio"><button type="button" class="text-button" data-action="detail-listen" aria-pressed="false">${icon("sound")} Dengar Sela</button><span class="cue-status" role="status"></span></div>`, "card-dialog");
+}
+
+function detailClips(card, tab) {
+  if (tab === "gambar") return [`${card.id}-M1`];
+  const ids = getCardClips(card, tab, { bridge: false });
+  return tab === "makna" ? ids.filter(id => !id.endsWith("-M1")) : ids;
+}
+
+function playDetail(button) {
+  if (button.getAttribute("aria-pressed") === "true") {
+    state.typingJob++; narrator.stop(); button.setAttribute("aria-pressed", "false");
+    button.innerHTML = `${icon("sound")} Dengar penjelasan Sela`;
+    return;
+  }
+  const card = BY_ID[state.detailCard];
+  const tab = modal.querySelector('.meaning-tab[aria-selected="true"]')?.dataset.tab || "makna";
+  const ids = detailClips(card, tab);
+  button.setAttribute("aria-pressed", "true");
+  button.innerHTML = `${icon("pause")} Hentikan suara`;
+  const next = index => {
+    if (!modal.open || state.modalMode !== "detail" || state.detailCard !== card.id) return;
+    if (!ids[index]) {
+      button.setAttribute("aria-pressed", "false");
+      button.innerHTML = `${icon("sound")} Dengar penjelasan Sela`;
+      return;
+    }
+    speakCue(ids[index], () => next(index + 1));
+  };
+  next(0);
 }
 
 function updateAudioUI() {
-  const on = audioEnabled();
-  const button = document.getElementById("soundToggle");
-  if (!button) return;
-  button.setAttribute("aria-pressed", String(on));
-  button.setAttribute(
-    "aria-label",
-    on ? "Matikan musik dan efek suara" : "Nyalakan musik dan efek suara",
-  );
-  const svg = button.querySelector("svg");
-  if (svg) {
-    svg.innerHTML = on
-      ? '<path d="M11 5 6 9H3v6h3l5 4zM16 8a6 6 0 0 1 0 8M19 5a10 10 0 0 1 0 14"/>'
-      : '<path d="M11 5 6 9H3v6h3l5 4zM16 9l5 6m0-6-5 6"/>';
+  const on = audioEnabled(), button = document.getElementById("soundToggle");
+  if (button) {
+    button.setAttribute("aria-pressed", String(on));
+    button.setAttribute("aria-label", on ? "Matikan semua suara" : "Nyalakan semua suara");
+    button.textContent = on ? "Senyapkan" : "Nyalakan";
   }
-  const slider = document.getElementById("soundVolume");
-  if (slider) slider.value = audioVolume();
-  const label = document.getElementById("volumeLabel");
-  if (label) label.textContent = `${audioVolume()}%`;
+  for (const [id, value] of [["musicVolume", musicVolume()], ["narratorVolume", narratorVolume()]]) {
+    const slider = document.getElementById(id), label = document.getElementById(id + "Label");
+    if (slider) slider.value = value;
+    if (label) label.textContent = value + "%";
+  }
 }
 
-async function startSound() {
+async function startSound({ listen = false } = {}) {
   narrator.unlock();
-  if (state.audioTouched) return;
+  if (state.audioTouched && (!listen || audioEnabled())) return;
   state.audioTouched = true;
   try {
     await enableAudio();
@@ -829,22 +852,21 @@ async function greetSela(button) {
     button.querySelector("span").textContent = "Dengar Sela";
   };
   if (button.dataset.active === "true") {
+    state.typingJob++;
     narrator.stop();
     reset();
     status.textContent = "";
     return;
   }
-  await startSound();
+  await startSound({ listen: true });
   if (state.route !== "beranda" || !button.isConnected) return;
   if (!audioEnabled() || !state.voiceAvailable) return;
-  const job = state.typingJob;
+  const job = ++state.typingJob;
   button.dataset.active = "true";
   button.setAttribute("aria-label", "Hentikan sapaan Sela");
   button.querySelector("span").textContent = "Sebentar…";
-  const hasReading = state.reading && !state.reading.finished;
-  const greeting = hasReading
-    ? "Emmm... kamu balik lagi. Sini, duduk lagi. Mejamu masih rapi, kartumu masih nunggu di sini. Lanjut cerita kita? Kita buka pelan-pelan, ya."
-    : "Emmm... hai, sini duduk dulu. Tarik nafas pelan-pelan... Silakan, kamu mau baca tentang dirimu yang bagian mana hari ini? Aku temani kamu mengurainya, satu kartu demi satu kartu. Atau kamu mau kenalan dulu sama kartunya?";
+  const greeting = document.getElementById("arrivalSpeech")?.textContent || getClipText(cue("SAMBUTAN-BARU"));
+  beginCaption(greeting, greeting, job);
   try {
     await narrator.speak(greeting, "Sambutan Sela", (value, speaking) => {
       if (!button.isConnected || job !== state.typingJob) return;
@@ -856,7 +878,7 @@ async function greetSela(button) {
         reset();
         status.textContent = "Suara belum tersedia. Kita ngobrol lewat teks dulu, ya.";
       }
-    }, reset);
+    }, result => { finishCaption(job, result); reset(); });
   } catch {
     if (!button.isConnected || job !== state.typingJob) return;
     reset();
@@ -879,7 +901,7 @@ async function speakSetup(button) {
     reset();
     return;
   }
-  await startSound();
+  await startSound({ listen: true });
   if (state.route !== "bacaan" || !button.isConnected) return;
   if (!audioEnabled() || !state.voiceAvailable) return;
   const job = state.typingJob;
@@ -907,19 +929,22 @@ function render({ focus = true } = {}) {
   const parts = (location.hash.slice(1) || "beranda").split("/");
   let route = parts[0] === "main" ? state.route : parts[0];
   if (!["beranda", "bacaan", "pilih", "baca", "kartu"].includes(route)) route = "beranda";
+  if (route === "bacaan" && state.reading?.finished) resetReadingSetup();
   if (["pilih", "baca"].includes(route) && !state.reading) route = "bacaan";
   if (route === "baca" && state.reading.selected.length !== 3) route = "pilih";
-  clearTimeout(state.typeTimer);
   clearTimeout(state.dialogueTimer);
   state.typingJob++;
-  state.typing = false;
-  narrator.stop({ disconnect: ["beranda", "kartu"].includes(route) });
+  narrator.stop();
+  cancelAnimationFrame(state.captionFrame);
+  state.caption = null;
+  const expanded = state.route === "baca" && route === "baca" && state.readingExpanded;
   state.route = route;
   document.body.dataset.screen = route;
-  closeModal();
+  closeModal({ resume: false });
   main.innerHTML = { beranda: home, bacaan: setup, pilih: pick, baca: reader, kartu: library }[
     route
   ]();
+  updateViewport();
   const readingLink = document.querySelector('[data-nav="bacaan"]');
   if (readingLink) readingLink.href = "#" + resumeRoute();
   const navRoute = ["pilih", "baca"].includes(route) ? "bacaan" : route;
@@ -932,10 +957,32 @@ function render({ focus = true } = {}) {
     : `${{ bacaan: "Baca Tarot", pilih: "Pilih Kartu", baca: "Bacaan Tarot", kartu: "Koleksi 78 Kartu" }[route]} — The Tarot Room`;
   if (route === "kartu") {
     fillLibrary();
-    if (BY_ID[parts[1]]) cardModal(parts[1]);
+    if (Object.hasOwn(BY_ID, parts[1])) cardModal(parts[1]);
   }
-  if (route === "baca") startDialogue();
-  if (route === "pilih") animateShuffle();
+  if (route === "baca") {
+    if (state.reading.finished) { playClosing(); prepareShareResult(state.reading); }
+    else if (state.reading.revealed.includes(state.reading.selected[state.reading.current])) {
+      if (expanded) readingModal(BY_ID[state.reading.selected[state.reading.current]]);
+      startDialogue();
+    } else {
+      const intro = state.preIntro;
+      speakCue(intro || cue(`PRE-${state.reading.current + 1}`), () => {
+        if (intro) { state.preIntro = null; render({ focus: false }); }
+      });
+    }
+  }
+  if (route === "pilih") {
+    animateShuffle();
+    const intro = state.pickIntro;
+    speakCue(intro || state.pickNotice || cue(`PILIH-${state.reading.selected.length}`), () => {
+      if (intro) { state.pickIntro = null; render({ focus: false }); }
+    });
+  }
+  if (route === "bacaan") speakCue(setupSpeechText());
+  if (route === "beranda") {
+    const id = cue(state.reading && !state.reading.finished ? "SAMBUTAN-KEMBALI" : "SAMBUTAN-BARU");
+    beginCaption(id, getClipText(id), state.typingJob, true);
+  }
   if (focus && !modal.open) {
     window.scrollTo?.({ top: 0, behavior: "instant" });
     requestAnimationFrame(() =>
@@ -947,6 +994,10 @@ function render({ focus = true } = {}) {
 document.addEventListener("submit", (event) => {
   if (event.target.id !== "setupForm") return;
   event.preventDefault();
+  if (state.setupStep === "topic") {
+    if (!Object.hasOwn(TOPICS, state.form.topic)) return;
+    state.setupStep = "question"; setSetupCue(`TOPIK-${state.form.topic}`); render(); return;
+  }
   const data = new FormData(event.target);
   state.form = {
     topic: String(data.get("topic") || "umum"),
@@ -960,8 +1011,11 @@ document.addEventListener("submit", (event) => {
       state.form.count,
     );
 
-    state.passageLimit =
-      innerHeight < 640 ? 115 : innerHeight < 740 ? 155 : 190;
+    state.cues = {};
+    state.pickIntro = cue("MULAI");
+    state.preIntro = null;
+    state.autoRead = true;
+    state.readingExpanded = false;
     state.dealing = true;
     state.lastPick = null;
     state.dialogue.id = null;
@@ -982,9 +1036,7 @@ document.addEventListener("input", (event) => {
     updateTemplateSelection();
     if (t.value.trim().length > 3 && !state.typedCommentShown) {
       state.typedCommentShown = true;
-      state.setupComment = "Emmm... tuliskan apa adanya dari hatimu. Nggak ada pertanyaan yang salah di meja ini.";
-      const speech = document.getElementById("setupSpeech");
-      if (speech) speech.textContent = state.setupComment;
+      setSetupCue("KETIK");
     }
   }
 
@@ -993,46 +1045,19 @@ document.addEventListener("input", (event) => {
     state.libraryPage = 0;
     fillLibrary();
   }
-  if (t.id === "soundVolume") {
-    setVolume(t.value);
-    const label = document.getElementById("volumeLabel");
-    if (label) label.textContent = `${audioVolume()}%`;
-  }
+  if (t.id === "musicVolume") { setMusicVolume(t.value); updateAudioUI(); }
+  if (t.id === "narratorVolume") { setNarratorVolume(t.value); updateAudioUI(); }
 });
 
 document.addEventListener("change", (event) => {
   const t = event.target;
-  if (t.name === "topic") {
+  if (t.name === "topic" && Object.hasOwn(TOPICS, t.value)) {
     state.form.topic = t.value;
-    const reaction = SELA_TOPIC_REACTIONS[t.value];
-    if (reaction) {
-      state.setupComment = reaction;
-      const speech = document.getElementById("setupSpeech");
-      if (speech) speech.textContent = reaction;
-    }
-    const topicData = TOPICS[t.value];
-    if (topicData) {
-      const qField = document.getElementById("question");
-      if (qField) {
-        qField.placeholder = topicData.question;
-        if (topicData.templates && topicData.templates.length) {
-          state.form.question = topicData.templates[0];
-          qField.value = topicData.templates[0];
-        }
-      }
-      const container = document.getElementById("questionTemplates");
-      if (container && topicData.templates) {
-        container.innerHTML = topicData.templates
-          .map(
-            (q) =>
-              `<button type="button" class="template-chip ${state.form.question === q ? "active" : ""}" aria-pressed="${state.form.question === q}" data-action="use-template" data-question="${esc(q)}">
-                <span class="chip-star" aria-hidden="true">${state.form.question === q ? "●" : "○"}</span>
-                <span class="chip-text">${esc(q)}</span>
-              </button>`,
-          )
-          .join("");
-      }
-    }
+    state.form.question = TOPICS[t.value].templates[0];
+    state.customQuestion = false;
+    setSetupCue(`TOPIK-${t.value}`);
+    const next = main.querySelector('[data-action="setup-next"]');
+    if (next) { next.disabled = false; next.innerHTML = `Pilih pertanyaan ${arrow}`; }
   }
   if (t.id === "suitFilter") {
     state.filter = t.value;
@@ -1072,25 +1097,63 @@ document.addEventListener("click", async (event) => {
     }
     else if (action === "edit") setHash("bacaan");
     else if (action === "new") {
-      state.reading = null;
-      state.form.question = "";
-      state.setupComment = null;
-      state.pickNotice = null;
+      resetReadingSetup();
       setHash("bacaan");
     } else if (action === "read-again") {
       r.finished = false;
       r.revealed = [];
       r.current = 0;
       state.dialogue.id = null;
+      state.preIntro = cue("ULANG", true);
+      state.autoRead = true;
       render();
+    } else if (action === "setup-next") {
+      if (!Object.hasOwn(TOPICS, state.form.topic)) return;
+      state.setupStep = "question";
+      setSetupCue(`TOPIK-${state.form.topic}`);
+      render();
+    } else if (action === "setup-back") {
+      state.setupStep = "topic";
+      state.setupComment = null;
+      render();
+    } else if (action === "custom-question") {
+      state.customQuestion = !state.customQuestion;
+      state.typedCommentShown = false;
+      render({ focus: false });
+      if (state.customQuestion) document.getElementById("question")?.focus({ preventScroll: true });
+    } else if (action === "filter-suit") {
+      state.filter = button.dataset.suit;
+      state.libraryPage = 0;
+      fillLibrary();
+    } else if (action === "clear-search") {
+      state.filter = "all";
+      state.search = "";
+      state.libraryPage = 0;
+      render({ focus: false });
+    } else if (action === "detail-listen") {
+      await startSound({ listen: true });
+      playDetail(button);
+    } else if (action === "share-result") {
+      await shareReadingResult(button);
+    } else if (action === "share-photo") {
+      const entry = state.shareResult;
+      button.disabled = true;
+      try { if (entry?.blob && !(await sharePhoto(entry.blob, entry.ids))) toast("Menu berbagi belum terbuka. Coba lagi, ya."); }
+      finally { button.disabled = false; }
+    } else if (action === "download-photo") {
+      downloadSharePhoto();
+    } else if (action === "copy-invitation") {
+      await copyInvitation();
+    } else if (action === "replay-line") {
+      await startSound({ listen: true });
+      startDialogue();
     } else if (action === "use-template") {
       state.form.question = button.dataset.question;
       document.getElementById("question").value = state.form.question;
       updateTemplateSelection();
       sfx("select");
-      state.setupComment = "Hmm... pertanyaan yang jujur. Simpan rasa penasaran ini di dadamu selagi kita siapkan kartunya.";
-      const speech = document.getElementById("setupSpeech");
-      if (speech) speech.textContent = state.setupComment;
+      const index = TOPICS[state.form.topic].templates.indexOf(state.form.question);
+      setSetupCue(`TEMPLATE-${state.form.topic}-${index + 1}`);
     } else if (action === "pick") {
       if (
         state.picking ||
@@ -1100,6 +1163,7 @@ document.addEventListener("click", async (event) => {
         return;
       state.picking = true;
       state.pickNotice = null;
+      state.pickIntro = null;
       sfx("select");
       try {
         await animateChoice(
@@ -1137,7 +1201,7 @@ document.addEventListener("click", async (event) => {
         r.selected = [];
         r.revealed = [];
         r.current = 0;
-        state.pickNotice = "Waduh, ragu ya? Nggak masalah sama sekali kok. Kita acak lagi kartunya sampai hatimu terasa pas.";
+        state.pickNotice = getClipText(cue("PILIH-RESET", true));
       }
       r.candidates = shuffledCards().slice(0, 7);
       state.dealing = true;
@@ -1162,18 +1226,18 @@ document.addEventListener("click", async (event) => {
       if (state.reading !== r || state.route !== "baca") return;
       revealCard(r);
       state.dialogue.id = null;
-      state.revealUntil = 0;
+      state.readingExpanded = true;
+      state.preIntro = null;
       sfx("place");
       render({ focus: false });
-    } else if (action === "story-next") advanceStory();
-    else if (action === "story-finish") finishTyping();
+    } else if (action === "next-card") nextCard();
     else if (action === "auto-read") {
       state.autoRead = !state.autoRead;
       clearTimeout(state.dialogueTimer);
-      if (!state.autoRead) narrator.stop();
-      button.setAttribute("aria-pressed", String(state.autoRead));
-      button.textContent = state.autoRead ? "Ⅱ Jeda" : "▷ Lanjut otomatis";
-      if (state.autoRead) startDialogue();
+      if (!state.autoRead) narrator.pause();
+      else if (!narrator.resume()) startDialogue();
+      if (state.autoRead) resumeCaptionClock();
+      syncReadingUI();
     } else if (action === "narrator") {
       state.narration = !state.narration;
       render({ focus: false });
@@ -1188,20 +1252,7 @@ document.addEventListener("click", async (event) => {
       try {
         await toggleAudio();
         updateAudioUI();
-        if (!audioEnabled()) {
-          narrator.stop();
-          const greeting = document.getElementById("arrivalVoice");
-          if (greeting) {
-            greeting.dataset.active = "false";
-            greeting.setAttribute("aria-pressed", "false");
-            greeting.setAttribute("aria-label", "Dengarkan sapaan Sela");
-            greeting.querySelector("span").textContent = "Dengar Sela";
-          }
-        }
-        else if (state.route === "baca") {
-          narrator.unlock();
-          startDialogue();
-        }
+
       } finally {
         button.disabled = false;
       }
@@ -1219,6 +1270,7 @@ document.addEventListener("pointerdown", (event) => {
   if (audioEnabled()) {
     primeAudio();
     narrator.unlock();
+    state.audioTouched = true;
   }
   if (!event.target.closest(".sound-control")) {
     const settings = document.getElementById("soundSettings");
@@ -1256,15 +1308,14 @@ document.addEventListener("keydown", (event) => {
 });
 
 modal.addEventListener("close", () => {
-  if (
-    !modal.open &&
-    state.route === "baca" &&
-    state.autoRead &&
-    !state.reading?.finished
-  )
-    startDialogue();
+  if (modal.open) return;
+  const paused = state.modalPaused;
+  if (state.modalMode === "detail") { state.typingJob++; narrator.stop(); }
+  state.readingExpanded = false;
+  state.modalMode = null;
+  state.modalPaused = false;
+  if (paused && state.route === "baca" && state.autoRead && !narrator.resume()) startDialogue();
 });
-
 modal.addEventListener("click", (event) => {
   if (event.target === modal) {
     const rect = modal.getBoundingClientRect();
@@ -1280,33 +1331,42 @@ modal.addEventListener("click", (event) => {
 
 window.addEventListener("hashchange", () => render());
 mobileHomeQuery.addEventListener("change", () => {
-  if (state.route === "beranda") render({ focus: false });
+  if (["beranda", "kartu"].includes(state.route)) render({ focus: false });
 });
+compactLandscapeQuery.addEventListener("change", () => {
+  if (state.route === "kartu") render({ focus: false });
+});
+function updateViewport() {
+  const height = Math.round(window.visualViewport?.height || window.innerHeight || 844);
+  const width = window.innerWidth || 390;
+  const header = document.querySelector(".site-header")?.getBoundingClientRect().height || 58;
+  const safeBottom = globalThis.getComputedStyle ? Math.max(0, parseFloat(getComputedStyle(main).paddingBottom) - 12) : 0;
+  const layout = roomLayout(width, height, header, safeBottom || 0);
+  const root = document.documentElement;
+  root.style.setProperty("--room-height", height + "px");
+  const setupPanel = main.querySelector(".setup-panel");
+  if (setupPanel) root.style.setProperty("--setup-fade-top", Math.max(header, setupPanel.getBoundingClientRect().top - 55) + "px");
+  for (const [key, value] of Object.entries(layout)) {
+    if (key === "wide") { document.body.dataset.wideRoom = String(value); continue; }
+    root.style.setProperty("--" + key.replace(/[A-Z]/g, letter => "-" + letter.toLowerCase()), value + "px");
+  }
+}
+window.addEventListener("resize", updateViewport);
+window.visualViewport?.addEventListener("resize", updateViewport);
+updateViewport();
 updateAudioUI();
 render({ focus: false });
-
-fetch("/api/config")
-  .then((r) => (r.ok ? r.json() : null))
-  .then((config) => {
-    narrator.configure(config || {});
-    state.voiceAvailable = narrator.mode !== "none";
-    state.voiceMode = narrator.mode;
-    const greeting = document.getElementById("arrivalVoice");
-    if (greeting) greeting.hidden = !state.voiceAvailable;
-    const setupVoice = document.getElementById("setupVoice");
-    if (setupVoice) setupVoice.hidden = !state.voiceAvailable;
-    if (state.route === "baca") render({ focus: false });
-    else if (state.route === "bacaan") narrator.prefetch();
-  })
-  .catch(() => {
-    narrator.configure({ narration: false });
-    state.voiceAvailable = narrator.mode !== "none";
-  });
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     clearTimeout(state.dialogueTimer);
-    state.typingJob++;
-    narrator.stop({ disconnect: true });
-  }
+    if (state.route === "baca" && !state.reading?.finished && state.modalMode !== "detail") {
+      state.autoRead = false;
+      narrator.pause();
+      syncReadingUI();
+    } else {
+      state.typingJob++;
+      narrator.stop();
+    }
+  } else resumeCaptionClock();
 });

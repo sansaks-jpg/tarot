@@ -1,211 +1,116 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import vm from "node:vm";
-import { parseEnv } from "./local-env.mjs";
+import { findClipId, getClipAudioUrl } from "../public/naskah.js";
 
-// Only fixture values are read here. The user's .env is never opened by tests.
-assert.deepEqual(
-  parseEnv(
-    '\uFEFFGEMINI_API_KEY=fixture-only\r\nGEMINI_LIVE_MODEL=gemini-3.8-live\nGEMINI_LIVE_VOICE="Aoede"\nSITE_URL=http://localhost:8080',
-  ),
-  {
-    GEMINI_API_KEY: "fixture-only",
-    GEMINI_LIVE_MODEL: "gemini-3.8-live",
-    GEMINI_LIVE_VOICE: "Aoede",
-    SITE_URL: "http://localhost:8080",
-  },
-);
-const timers = new Map(),
-  starts = [],
-  sockets = [];
-let timerId = 0,
-  tokenRequests = 0,
-  fetchFails = false;
+const requests = [], sources = [], ducking = [];
+let enabled = true, failure = false, blockedId = null, release;
 const ctx = {
-  state: "running",
-  currentTime: 0,
-  destination: {},
-  resume: async () => {},
+  state: "running", currentTime: 0, destination: {},
+  async resume() {},
   createGain: () => ({ gain: { setTargetAtTime() {} }, connect() {} }),
   createDynamicsCompressor: () => ({ threshold: {}, ratio: {}, connect() {} }),
-  createBuffer: (channels, length, rate) => ({
-    duration: length / rate,
-    getChannelData: () => new Float32Array(length),
-  }),
-  createBufferSource: () => ({
-    connect() {},
-    disconnect() {},
-    start(at) {
-      starts.push({ at, source: this });
-    },
-    stop() {
-      this.stopped = true;
-    },
-  }),
-};
-class Socket {
-  constructor() {
-    this.readyState = 0;
-    this.sent = [];
-    sockets.push(this);
-    queueMicrotask(() => {
-      this.readyState = 1;
-      this.onopen?.();
-    });
-  }
-  send(text) {
-    const message = JSON.parse(text);
-    this.sent.push(message);
-    if (message.setup) queueMicrotask(() => this.emit({ setupComplete: {} }));
-  }
-  emit(message) {
-    this.onmessage?.({ data: JSON.stringify(message) });
-  }
-  close() {
-    this.readyState = 3;
-    this.onclose?.();
-  }
-}
-const scope = vm.createContext({
-  console,
-  Blob,
-  AbortController,
-  Uint8Array,
-  DataView,
-  Float32Array,
-  performance,
-  atob,
-  WebSocket: Socket,
-  getAudioContext: () => ctx,
-  audioEnabled: () => true,
-  audioVolume: () => 100,
-  duckMusic() {},
-  setTimeout: (cb, delay) => {
-    const id = ++timerId;
-    timers.set(id, { cb, delay });
-    return id;
-  },
-  clearTimeout: (id) => timers.delete(id),
-  fetch: async () => {
-    tokenRequests++;
-    if (fetchFails) throw Error("fixture failure");
-    return {
-      ok: true,
-      json: async () => ({
-        token: "fixture-ephemeral",
-        setup: { model: "models/gemini-3.8-live" },
-      }),
+  decodeAudioData: async data => ({ duration: 20, data }),
+  createBufferSource() {
+    const source = {
+      connect() {}, disconnect() { this.disconnected = true; },
+      start(at, offset) { this.started = { at, offset }; },
+      stop() { this.stopped = true; },
     };
+    sources.push(source);
+    return source;
+  },
+};
+const scope = vm.createContext({
+  findClipId, getClipAudioUrl, getAudioContext: () => ctx,
+  narratorVolume: () => 100, audioEnabled: () => enabled,
+  duckMusic(value) { ducking.push(value); },
+  fetch: async url => {
+    requests.push(url);
+    assert.match(url, /^\/assets\/audio\/clips\/[^/]+\.mp3$/, "The narrator can request only local recorded MP3 assets");
+    if (url.includes(blockedId || "no-match")) await new Promise(resolve => { release = resolve; });
+    return { ok: !failure, arrayBuffer: async () => new ArrayBuffer(8) };
   },
 });
-const source = (
-  await fs.readFile(new URL("../public/narrator.js", import.meta.url), "utf8")
-)
-  .replace(/^import[\s\S]*?;\s*/m, "")
-  .replace("export class LiveNarrator", "class LiveNarrator")
-  .split("export const narrator")[0];
-assert.doesNotMatch(
-  source,
-  /speechSynthesis|SpeechSynthesisUtterance|deviceSpeak/,
-);
-vm.runInContext(source + "\nglobalThis.TestNarrator=LiveNarrator;", scope);
-const settle = async () => {
-  for (let i = 0; i < 20; i++) await Promise.resolve();
-};
+const source = await fs.readFile(new URL("../public/narrator.js", import.meta.url), "utf8");
+assert.doesNotMatch(source, /WebSocket|api\/|speechSynthesis|SpeechSynthesisUtterance|LiveNarrator|gemini/i);
+vm.runInContext(source.replace(/^\uFEFF/, "").replace(/^import[\s\S]*?;\s*/gm, "").replace("export class RecordedNarrator", "class RecordedNarrator").split("export const narrator")[0] + "\nglobalThis.TestNarrator=RecordedNarrator;", scope);
+const settle = async () => { for (let i = 0; i < 15; i++) await Promise.resolve(); };
 const n = new scope.TestNarrator();
-n.configure({ narration: true });
-n.unlock();
-const chunk = {
-  mimeType: "audio/pcm;rate=24000",
-  data: Buffer.alloc(4800).toString("base64"),
-};
-n.prepare("Bacaan pertama.", "The Fool");
-await settle();
-assert.equal(tokenRequests, 1);
-assert.equal(sockets.length, 1);
-assert.equal(sockets[0].sent.filter((m) => m.clientContent).length, 1);
-await n.speak("Bacaan pertama.", "The Fool");
-await settle();
-sockets[0].emit({
-  serverContent: { modelTurn: { parts: [{ inlineData: chunk }] } },
-});
-await settle();
-assert.equal(starts.length, 1, "First PCM must start before turnComplete");
-assert.equal(n.active.complete, false);
-assert.equal(starts[0].at, 0.035, "Playback only adds a 35 ms jitter margin");
-sockets[0].emit({
-  serverContent: { modelTurn: { parts: [{ inlineData: chunk }] } },
-});
-await settle();
-assert.ok(
-  Math.abs(starts[1].at - 0.135) < 0.000001,
-  "Consecutive PCM chunks must be contiguous",
-);
-sockets[0].emit({ serverContent: { turnComplete: true } });
-await settle();
+assert.equal(n.mode, "recorded");
+let completed = 0;
+const statuses = [];
+await n.speak("m00-M1", "The Fool", (text, speaking) => statuses.push({ text, speaking }), () => completed++);
+assert.equal(requests.length, 1);
+assert.deepEqual(sources[0].started, { at: 0, offset: 0 });
+assert.equal(statuses.at(-1).speaking, true);
+assert.equal(ducking.at(-1), true);
+ctx.currentTime = 4.25;
+assert.equal(n.playback().elapsed, 4.25);
+assert.equal(n.pause(), true);
+assert.equal(n.playback().paused, true);
+ctx.currentTime += 3;
+assert.equal(n.playback().elapsed, 4.25, "Paused caption clock stays at the same audio offset");
+assert.equal(n.pause(), false);
+assert.equal(completed, 0);
+assert.equal(sources[0].stopped, true);
+assert.equal(statuses.at(-1).text, "Dijeda");
+assert.equal(n.resume(), true);
+assert.equal(n.resume(), false);
+assert.deepEqual(sources[1].started, { at: 0, offset: 4.25 }, "Resume must retain the exact audio offset");
+assert.equal(requests.length, 1, "Resume does not fetch the clip again");
+sources[1].onended();
+assert.equal(completed, 1);
+assert.equal(sources[1].disconnected, true);
+assert.equal(ducking.at(-1), false);
+await n.speak("m00-M1", "The Fool");
+assert.equal(requests.length, 1, "Replay reuses the decoded buffer");
+const stopped = sources.at(-1);
+const oldEnd = stopped.onended;
 n.stop();
-assert.ok(starts.every((s) => s.source.stopped));
-await n.speak("Bacaan pertama.", "The Fool");
+oldEnd();
+assert.equal(n.playing, null);
+assert.equal(stopped.stopped, true);
+const beforeUnknown = requests.length;
+await n.speak("Unregistered or partially matching text", "Card");
+assert.equal(requests.length, beforeUnknown, "Unknown text never creates an API request or picks an unrelated recording");
+enabled = false;
+await n.speak("m01-M1", "Card");
+assert.equal(requests.length, beforeUnknown);
+enabled = true;
+
+// A late download from a cancelled sentence must not play or unduck newer speech.
+blockedId = "m02-M1";
+const old = n.speak("m02-M1", "Old");
 await settle();
-assert.equal(
-  tokenRequests,
-  1,
-  "Cached replay does not request a new connection",
-);
-assert.equal(starts.length, 4);
-await n.speak("Bacaan kedua.", "The Sun");
-await settle();
-assert.equal(
-  sockets.length,
-  1,
-  "A reading reuses its existing Gemini connection",
-);
-sockets[0].emit({
-  serverContent: { modelTurn: { parts: [{ inlineData: chunk }] } },
-});
-await settle();
-const before = starts.length;
+await n.speak("m03-M1", "New");
+const newSource = sources.at(-1), count = sources.length;
+assert.equal(ducking.at(-1), true);
+release();
+await old;
+assert.equal(sources.length, count);
+assert.equal(newSource.stopped, undefined);
+assert.equal(ducking.at(-1), true, "Cancelled preparation must not change the new clip's ducking");
+blockedId = null;
 n.stop();
-n.prepare("Bacaan ketiga.", "The Moon");
-await settle();
-sockets[0].emit({
-  serverContent: { modelTurn: { parts: [{ inlineData: chunk }] } },
-});
-await settle();
-assert.equal(starts.length, before, "Old passage audio cannot leak after stop");
-sockets[0].emit({ serverContent: { turnComplete: true } });
-await settle();
-assert.equal(n.active.passage, "Bacaan ketiga.");
-sockets[0].emit({
-  serverContent: {
-    modelTurn: { parts: [{ inlineData: chunk }] },
-    turnComplete: true,
-  },
-});
-await settle();
-await n.speak("Bacaan ketiga.", "The Moon");
-await settle();
-assert.equal(
-  starts.length,
-  before + 1,
-  "Prepared next passage is ready to play",
-);
-n.stop({ disconnect: true });
-assert.equal(n.queue.length, 0);
-assert.equal(n.socket, null);
-fetchFails = true;
-const failed = new scope.TestNarrator();
-failed.configure({ narration: true });
-const entry = failed.request("Fixture.", "Fixture");
-await assert.rejects(entry.promise);
-await settle();
-assert.equal(
-  failed.queue.length,
-  0,
-  "Failed token requests must clear queued generation",
-);
-assert.equal(failed.cache.size, 0);
-failed.disconnect();
-console.log(
-  "PASS: env fixture, Gemini-only voice, first-chunk streaming, contiguous PCM, shared connection, cached next passage, stopped-audio isolation, and failed-token cleanup.",
-);
+
+// Preparation and immediate playback share one pending download/decode.
+const beforePrepare = requests.length;
+n.prepare("m04-M1");
+await n.speak("m04-M1", "Prepared");
+assert.equal(requests.length, beforePrepare + 1);
+n.stop();
+for (let i = 5; i <= 17; i++) await n.clipBuffer(`m${String(i).padStart(2, "0")}-M1`);
+assert.equal(n.clipBuffers.size, 8, "Decoded audio cache stays bounded on mobile");
+assert.equal(n.pendingClips.size, 0);
+failure = true;
+let result;
+const failedStatuses = [];
+await n.speak("p14-R1", "Missing", (text, speaking) => failedStatuses.push({ text, speaking }), value => { result = value; });
+assert.equal(result.audio, false);
+assert.ok(failedStatuses.every(status => !status.speaking), "Missing audio is never reported as audible");
+assert.match(failedStatuses.at(-1).text, /Rekaman belum tersedia/);
+assert.equal(n.playing, null);
+assert.equal(n.pendingClips.size, 0);
+assert.equal(ducking.at(-1), false);
+console.log("PASS: prerecorded-only local requests, exact matching, cached playback, pause/resume offset, cancellation and late-download isolation, preload deduplication, bounded cache, mute, and visible missing-audio recovery (simulated AudioContext).");

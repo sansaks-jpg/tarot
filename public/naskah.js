@@ -2543,10 +2543,10 @@ export function getClipAudioUrl(id) {
   return `/assets/audio/clips/${id}.mp3`;
 }
 
-export function pickRandomVariant(prefix, variants = ["a", "b"]) {
-  const chosen = variants[Math.floor(Math.random() * variants.length)];
-  const id = `${prefix}-${chosen}`;
-  return SELA_CLIPS[id] ? id : `${prefix}-a`;
+export function pickRandomVariant(prefix) {
+  if (Object.hasOwn(SELA_CLIPS, prefix)) return prefix;
+  const ids = ["a", "b", "c"].map(suffix => `${prefix}-${suffix}`).filter(id => SELA_CLIPS[id]);
+  return ids[Math.floor(Math.random() * ids.length)] || null;
 }
 
 const TEXT_TO_ID = new Map();
@@ -2557,15 +2557,12 @@ for (const [id, clip] of Object.entries(SELA_CLIPS)) {
 export function findClipId(textOrId) {
   if (!textOrId) return null;
   const str = String(textOrId).trim();
-  if (SELA_CLIPS[str]) return str;
+  if (Object.hasOwn(SELA_CLIPS, str)) return str;
   if (TEXT_TO_ID.has(str)) return TEXT_TO_ID.get(str);
-  for (const [text, id] of TEXT_TO_ID.entries()) {
-    if (str.includes(text) || text.includes(str)) return id;
-  }
   return null;
 }
 
-export function getCardClips(card, chapter = "makna", { position = 0 } = {}) {
+export function getCardClips(card, chapter = "makna", { position = 0, bridge = true, variant = "a" } = {}) {
   const id = card.id;
   const posNum = (position >= 0 && position <= 2) ? position + 1 : 1;
   const suit = card.suit || "major";
@@ -2577,9 +2574,8 @@ export function getCardClips(card, chapter = "makna", { position = 0 } = {}) {
     return [`${id}-R1`].filter(cid => SELA_CLIPS[cid]);
   }
   if (chapter === "makna") {
-    const bridge = `BR-${posNum}-${suit}-a`;
     const list = [
-      bridge,
+      ...(bridge ? [`BR-${posNum}-${suit}-${variant}`] : []),
       `${id}-M1`,
       `${id}-M2`,
     ];
@@ -2589,4 +2585,10 @@ export function getCardClips(card, chapter = "makna", { position = 0 } = {}) {
     return list.filter(cid => SELA_CLIPS[cid]);
   }
   return [];
+}
+
+export function readingScript(card, options = {}) {
+  return ["makna", "langkah", "refleksi"].flatMap(chapter =>
+    getCardClips(card, chapter, options).map(id => ({ id, chapter, text: getClipText(id) })),
+  );
 }

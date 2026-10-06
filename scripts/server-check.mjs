@@ -62,6 +62,12 @@ assert.equal((await request("/%ZZ")).status, 400);
 assert.equal((await request("/%2e%2e%2f.env")).status, 403);
 assert.equal((await request("/.env")).status, 404);
 assert.equal((await request("/", "POST")).status, 405);
+assert.equal((await request("/api/config")).status, 404);
+assert.equal((await request("/api/live-token")).status, 404);
+const clip = await request("/assets/audio/clips/m00-M1.mp3", "GET", { range: "bytes=0-31" });
+assert.equal(clip.status, 206);
+assert.equal(clip.headers["Content-Type"], "audio/mpeg");
+assert.equal(clip.body.length, 32);
 console.log(
   "PASS: local audio streaming ranges, media headers, HEAD requests, malformed paths, traversal protection, and inaccessible .env.",
 );
