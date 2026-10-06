@@ -54,13 +54,13 @@ const state = {
 };
 const SELA_TOPIC_REACTIONS = {
   hubungan:
-    "Urusan hati ya... Kadang yang bikin lelah bukan rasa sakitnya, tapi hal-hal yang belum sempat terucap. Mari kita lihat apa yang tersembunyi di sana.",
+    "Emmm... urusan hati ya. Kadang yang bikin lelah bukan rasanya, tapi hal-hal yang belum sempat terucap. Mari kita lihat apa yang tersembunyi di sana.",
   kerja:
-    "Tentang arah langkah dan pekerjaanmu. Kalau belakangan ini terasa berat atau membingungkan, wajar kok. Mari kita urai benang kusutnya satu per satu.",
+    "Hmm... tentang arah langkah dan pekerjaanmu. Kalau belakangan ini terasa berat atau membingungkan, wajar kok. Mari kita urai benang kusutnya satu per satu.",
   diri:
-    "Kembali ke dalam diri sendiri... Sepertinya ada bagian batinmu yang sudah lama minta didengar tapi terus kamu tunda. Sini, luangkan waktu sejenak buat dirimu.",
+    "Emmm... kembali ke dalam diri sendiri. Sepertinya ada bagian batinmu yang sudah lama minta didengar tapi terus kamu tunda. Sini, luangkan waktu sejenak buat dirimu.",
   umum:
-    "Pikiranmu lagi penuh ya? Nggak apa-apa, lepasin dulu beban di pundakmu sejenak. Kita mulai dari apa pun yang terasa paling dekat di hatimu.",
+    "Wah... pikiranmu lagi penuh banget ya? Nggak apa-apa, lepasin dulu beban di pundakmu sejenak. Kita mulai dari apa pun yang terasa paling dekat di hatimu.",
 };
 const arrow = '<span aria-hidden="true">→</span>';
 const icons = {
@@ -136,9 +136,9 @@ function mobileWelcome(hasReading) {
     </div>
     <div class="arrival-dialogue">
       <div class="arrival-speaker"><span><span aria-hidden="true">✦</span> Sela <small>· pembaca tarotmu</small></span><button type="button" class="arrival-voice" id="arrivalVoice" data-action="greeting" aria-label="Dengarkan sapaan Sela" aria-pressed="false" ${state.voiceAvailable ? "" : "hidden"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 5 9H2v6h3l4 4zM14 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg><span>Dengar Sela</span></button></div>
-      <p class="arrival-hello">${hasReading ? "Eh, kamu balik. Sini, duduk lagi." : "Hai, sini duduk dulu. Tarik nafas pelan-pelan…"}</p>
+      <p class="arrival-hello">${hasReading ? "Emmm... kamu balik lagi. Sini, duduk lagi." : "Emmm... hai, sini duduk dulu. Tarik nafas pelan-pelan…"}</p>
       <h1 tabindex="-1">${hasReading ? "Lanjut cerita kita?" : "Mau baca tarot?"}</h1>
-      <p class="arrival-invitation">${hasReading ? "Mejamu masih rapi, kartumu masih menunggu di sini. Kita lanjut pelan-pelan, ya." : "Silakan, duduk senyaman mungkin. Kira-kira bagian mana dari ceritamu atau dirimu yang lagi paling butuh kejelasan hari ini? Aku temani kamu mengurainya, satu kartu demi satu kartu."}</p>
+      <p class="arrival-invitation">${hasReading ? "Mejamu masih rapi, kartumu masih menunggu di sini. Kita lanjut pelan-pelan, ya." : "Silakan, duduk senyaman mungkin. Kira-kira kamu mau baca tentang dirimu yang bagian mana hari ini? Aku temani kamu mengurainya, satu kartu demi satu kartu."}</p>
       <div class="arrival-choices">
         <a class="arrival-choice choice-reading" href="#${hasReading ? resumeRoute() : "bacaan"}" data-reading-link>${cardsIcon}<span>${hasReading ? "Iya, lanjutkan bacaanku" : "Mau, bacain aku"}</span>${arrow}</a>
         <a class="arrival-choice choice-explore" href="#kartu"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="7" height="14" rx="1"/><rect x="14" y="5" width="7" height="14" rx="1"/><path d="M6.5 9v6m11-6v6"/></svg><span>Lihat-lihat kartu dulu</span>${arrow}</a>
@@ -224,10 +224,10 @@ function setupSpeechText() {
   const hasReading = state.reading && !state.reading.finished;
   if (state.setupComment) return state.setupComment;
   if (hasReading)
-    return "Selamat datang kembali. Duduk lagi... kita lanjutkan ceritamu yang sempat terjeda.";
+    return "Emmm... selamat datang kembali. Duduk lagi... kita lanjutkan ceritamu yang sempat terjeda.";
   return (
     SELA_TOPIC_REACTIONS[state.form.topic] ||
-    "Silakan, duduk senyaman mungkin. Bagian mana dari ceritamu atau dirimu yang lagi paling butuh kejelasan hari ini?"
+    "Emmm... silakan, duduk senyaman mungkin. Kamu mau baca tentang dirimu yang bagian mana hari ini?"
   );
 }
 
@@ -321,12 +321,12 @@ function presence() {
 
 function pickComment(selectedCount) {
   if (selectedCount === 1)
-    return "Satu kartu pertama sudah kamu tarik... ini yang akan menceritakan akar dari pertanyaanmu.";
+    return "Wah, satu kartu pertama sudah kamu tarik... ini yang akan menceritakan akar dari pertanyaanmu.";
   if (selectedCount === 2)
-    return "Dua kartu... kartu ini yang menangkap apa yang sedang bergejolak di dalam dirimu sekarang. Tinggal satu lagi.";
+    return "Hmm... dua kartu. Kartu ini yang menangkap apa yang sedang bergejolak di dalam dirimu sekarang. Tinggal satu lagi.";
   if (selectedCount >= 3)
-    return "Tiga kartu sudah lengkap di atas meja kain. Tarik nafas dalam-dalam... kalau kamu sudah siap, yuk kita buka satu per satu.";
-  return "Kartunya sudah aku sebar di atas meja kain. Nggak perlu ditebak pakai logika... ikuti getaran atau tarikan jemarimu. Ambil tiga kartu yang memanggilmu.";
+    return "Emmm... Tiga kartu sudah lengkap di atas meja kain. Tarik nafas dalam-dalam... kalau kamu sudah siap, yuk kita buka satu per satu.";
+  return "Emmm... kartunya sudah aku sebar di atas meja kain. Nggak perlu ditebak pakai logika... ikuti getaran atau tarikan jemarimu. Ambil tiga kartu yang memanggilmu.";
 }
 
 function pick() {
@@ -536,7 +536,7 @@ function reader() {
       .join(
         "",
       )}</div>${opened ? `<p class="card-keywords">${c.keywords}</p>` : '<p class="tap-hint">Sentuh kartu yang paling besar</p>'}</div></div>
-    ${opened ? dialogue(c) : `<p class="table-conversation"><span>Sela</span><span class="conversation-text">${["Kita mulai dari kartu pertama. Akar dari ceritamu. Sentuh kartunya saat kamu siap mendengarkan.", "Sekarang kartu kedua... yang menangkap dinamika dan apa yang sedang bergejolak di batinmu. Buka kartunya pelan-pelan.", "Dan kartu terakhir... arah lentera untuk langkahmu ke depan. Buka saat hatimu siap."][r.current]}</span></p>`}
+    ${opened ? dialogue(c) : `<p class="table-conversation"><span>Sela</span><span class="conversation-text">${["Emmm... kita mulai dari kartu pertama. Akar dari ceritamu. Sentuh kartunya saat kamu siap mendengarkan.", "Hmm... sekarang kartu kedua... yang menangkap dinamika dan apa yang sedang bergejolak di batinmu. Buka kartunya pelan-pelan.", "Dan kartu terakhir... arah lentera untuk langkahmu ke depan. Buka saat hatimu siap."][r.current]}</span></p>`}
     <div class="screen-actions"><button class="button primary" id="storyNext" data-action="${opened ? "story-next" : "reveal"}">${opened ? (more ? "Lanjut" : r.current === 2 ? "Lihat tiga kartuku" : "Kartu berikutnya") : "Buka kartu"} ${arrow}</button></div>`,
     "reader-screen immersive-screen",
   );
@@ -701,7 +701,7 @@ function summary() {
     ${question(r)}
     <div class="summary-speech">
       <span class="speaker-name"><span aria-hidden="true">✦</span> Sela</span>
-      <p>“Tiga kartu sudah selesai bercerita untukmu hari ini. Ingat, kartu bukan vonis masa depan—kartu adalah cermin agar kamu bisa melihat dirimu dengan lebih jujur dan lembut. Ambil bagian yang beresonansi, dan lepaskan yang tidak.”</p>
+      <p>“Emmm... Tiga kartu sudah selesai bercerita untukmu hari ini. Ingat, kartu bukan vonis masa depan—kartu adalah cermin agar kamu bisa melihat dirimu dengan lebih jujur dan lembut. Ambil bagian yang beresonansi, dan lepaskan yang tidak.”</p>
     </div>
     <div class="screen-actions"><button class="button primary" data-action="new">Mulai bacaan baru ${arrow}</button><button class="text-button" data-action="read-again">Baca kartu ini lagi</button></div>`,
     "reading-result",
@@ -843,8 +843,8 @@ async function greetSela(button) {
   button.querySelector("span").textContent = "Sebentar…";
   const hasReading = state.reading && !state.reading.finished;
   const greeting = hasReading
-    ? "Eh, kamu balik. Sini, duduk lagi. Mejamu masih rapi, kartumu masih nunggu di sini. Lanjut cerita kita? Kita buka pelan-pelan, ya."
-    : "Hai, sini duduk dulu. Tarik nafas pelan-pelan... Kira-kira bagian mana dari ceritamu atau dirimu yang lagi paling butuh kejelasan hari ini? Aku temani kamu mengurainya, satu kartu demi satu kartu. Atau kamu mau kenalan dulu sama kartunya?";
+    ? "Emmm... kamu balik lagi. Sini, duduk lagi. Mejamu masih rapi, kartumu masih nunggu di sini. Lanjut cerita kita? Kita buka pelan-pelan, ya."
+    : "Emmm... hai, sini duduk dulu. Tarik nafas pelan-pelan... Silakan, kamu mau baca tentang dirimu yang bagian mana hari ini? Aku temani kamu mengurainya, satu kartu demi satu kartu. Atau kamu mau kenalan dulu sama kartunya?";
   try {
     await narrator.speak(greeting, "Sambutan Sela", (value, speaking) => {
       if (!button.isConnected || job !== state.typingJob) return;
@@ -982,7 +982,7 @@ document.addEventListener("input", (event) => {
     updateTemplateSelection();
     if (t.value.trim().length > 3 && !state.typedCommentShown) {
       state.typedCommentShown = true;
-      state.setupComment = "Tuliskan apa adanya dari hatimu. Nggak ada pertanyaan yang salah di meja ini.";
+      state.setupComment = "Emmm... tuliskan apa adanya dari hatimu. Nggak ada pertanyaan yang salah di meja ini.";
       const speech = document.getElementById("setupSpeech");
       if (speech) speech.textContent = state.setupComment;
     }
@@ -1088,7 +1088,7 @@ document.addEventListener("click", async (event) => {
       document.getElementById("question").value = state.form.question;
       updateTemplateSelection();
       sfx("select");
-      state.setupComment = "Pertanyaan yang jujur... Simpan rasa penasaran ini di dadamu selagi kita siapkan kartunya.";
+      state.setupComment = "Hmm... pertanyaan yang jujur. Simpan rasa penasaran ini di dadamu selagi kita siapkan kartunya.";
       const speech = document.getElementById("setupSpeech");
       if (speech) speech.textContent = state.setupComment;
     } else if (action === "pick") {
@@ -1137,7 +1137,7 @@ document.addEventListener("click", async (event) => {
         r.selected = [];
         r.revealed = [];
         r.current = 0;
-        state.pickNotice = "Ragu ya? Nggak masalah sama sekali. Kita acak lagi kartunya sampai hatimu terasa pas.";
+        state.pickNotice = "Waduh, ragu ya? Nggak masalah sama sekali kok. Kita acak lagi kartunya sampai hatimu terasa pas.";
       }
       r.candidates = shuffledCards().slice(0, 7);
       state.dealing = true;

@@ -29,28 +29,28 @@ export function passages(text, limit = 190) {
 const SUIT_INSIGHTS = {
   major: [
     "Ada fase penting dalam perjalanan hidupmu yang sedang membentuk cara pandangmu.",
-    "Ini energi yang cukup kuat—ada pergulatan batin atau ujian yang menuntutmu jujur pada dirimu sendiri.",
+    "Bukan buat nakut-nakutin ya, tapi mengajakmu jujur pada apa yang sedang terjadi.",
     "Ada transformasi bermakna yang sedang menunggumu saat kamu berani melangkah.",
   ],
   swords: [
-    "Sepertinya pikiranmu belakangan ini terasa bising, ada banyak keraguan internal yang kamu simpan sendiri.",
-    "Tantangan utamamu saat ini ada di kepala—perang kecil antara logika dan rasa cemas yang belum reda.",
-    "Kuncinya adalah menjernihkan pikiran. Ketenangan akan membantumu melihat jalan keluar yang lebih terang.",
+    "Sepertinya belakangan ini pikiranmu lagi bising banget, ada pergulatan internal yang kamu tahan sendiri.",
+    "Tantangan terbesarmu ada di kepalamu sendiri—perang kecil antara logika dan rasa cemas.",
+    "Ketenangan batin adalah kuncinya untuk menjernihkan kabut di kepalamu.",
   ],
   cups: [
     "Ada rasa atau kerentanan hati yang selama ini kamu tahan-tahan agar tidak tumpah ke luar.",
-    "Dinamika batinmu sedang bergejolak. Rasa lelah atau kecewa yang belum sempat kamu beri ruang bernafas.",
-    "Kartu ini mengajak hatimu beristirahat. Dengarkan apa yang benar-benar membuat jiwamu merasa damai.",
+    "Nafas dulu pelan-pelan... dinamika batinmu sedang butuh ruang untuk bernafas.",
+    "Dengarkan apa yang benar-benar membuat jiwamu merasa damai kembali.",
   ],
   wands: [
-    "Dorongan dan semangatmu sebenarnya ada, tapi energimu terasa terbagi ke terlalu banyak arah.",
-    "Tantangannya adalah ritme. Jangan memaksakan diri berlari ketika nafasmu sendiri belum teratur.",
-    "Fokuskan energimu ke satu hal yang paling bermakna. Nyalakan apimu perlahan tanpa membakar dirimu.",
+    "Api dan semangatmu sebenarnya ada, tapi energimu terasa terbagi ke terlalu banyak arah.",
+    "Jangan memaksakan diri berlari ketika nafasmu sendiri belum teratur.",
+    "Satukan kembali energimu pada satu hal yang paling bermakna.",
   ],
   pentacles: [
-    "Kamu sedang sangat membutuhkan pijakan yang nyata dan rasa aman yang bisa diandalkan.",
+    "Ini menyangkut hal nyata—sepertinya kamu lagi sangat membutuhkan kepastian dan rasa aman.",
     "Kekhawatiran tentang kestabilan hidup atau hasil nyata sedang membayangi langkahmu.",
-    "Langkah kecil yang konsisten akan jadi jangkar terbaikmu. Hasil nyata akan tumbuh dari ketelatenan.",
+    "Langkah kecil yang konsisten akan jadi jangkar terbaikmu untuk sampai ke tempat yang aman.",
   ],
 };
 
@@ -60,28 +60,31 @@ function formatMeaning(card, options = {}) {
   const insight = (SUIT_INSIGHTS[suit] || SUIT_INSIGHTS.major)[Math.max(0, Math.min(pos, 2))];
 
   if (pos === 0) {
-    return `Lihat kartu pertamamu, ${card.indo}. Sepertinya ada hal yang selama ini mengendap dalam dirimu. ${insight} Kartu ini menangkap: ${card.meaning}`;
+    const filler = suit === "swords" ? "Waduh..." : suit === "wands" ? "Wah..." : "Emmm...";
+    return `${filler} lihat kartu pertamamu, ${card.indo}. ${insight} Kartu ini menangkap: ${card.meaning}`;
   }
   if (pos === 1) {
-    return `Lalu di kartu kedua, ${card.indo} memperlihatkan apa yang sedang bergulat di batinmu. ${insight} Kartu ini membaca: ${card.meaning}`;
+    const filler = suit === "swords" || suit === "major" || suit === "pentacles" ? "Waduh..." : "Emmm...";
+    return `${filler} lalu di kartu kedua, ${card.indo} memperlihatkan apa yang sedang bergulat di batinmu. ${insight} Kartu ini membaca: ${card.meaning}`;
   }
   if (pos === 2) {
-    return `Dan untuk kartu penutup, ${card.indo} hadir seperti lentera kecil untuk langkahmu. ${insight} Kartu ini mengingatkan: ${card.meaning}`;
+    const filler = suit === "cups" || suit === "major" ? "Wah..." : "Hmm...";
+    return `${filler} dan untuk kartu penutup, ${card.indo} hadir seperti lentera kecil untuk langkahmu. ${insight} Kartu ini mengingatkan: ${card.meaning}`;
   }
-  return `Di balik ${card.indo}, sepertinya ada proses penting yang sedang berlangsung dalam dirimu. ${card.meaning}`;
+  return `Emmm... di balik ${card.indo}, sepertinya ada proses penting yang sedang berlangsung dalam dirimu. ${card.meaning}`;
 }
 
 export function cardStory(card, chapter = "makna", limit = 190, options = {}) {
   if (chapter === "gambar") {
     return card.symbols.flatMap((text) =>
-      passages(`Perhatikan simbolnya: ${text}`, limit),
+      passages(`Coba perhatikan detail simbolnya... ${text}`, limit),
     );
   }
   if (chapter === "langkah") {
-    return passages(`Kalau kita bawa ke langkah nyata sehari-hari: ${card.action}`, limit);
+    return passages(`Emmm, kalau kita bawa ke langkah nyata sehari-hari: ${card.action}`, limit);
   }
   if (chapter === "refleksi") {
-    return passages(`Bawa pertanyaan ini mengendap sejenak di hatimu: ${card.prompt}`, limit);
+    return passages(`Coba renungkan sejenak di dalam hatimu... ${card.prompt}`, limit);
   }
   return passages(formatMeaning(card, options), limit);
 }
