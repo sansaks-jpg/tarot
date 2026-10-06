@@ -54,6 +54,7 @@ Narasi Sela dirancang layaknya pembaca kartu tarot sungguhan—intim, empatik, d
 - **Komentar Interaktif Setiap Gerakan:** Sela menanggapi pilihan topik (Asmara, Karir, Diri, Umum), pilihan pertanyaan, penarikan kartu satu per satu di meja kocokan (1/3, 2/3, 3/3), kocok ulang, hingga pesan penutup reflektif di akhir sesi.
 - **Pembacaan Kartu Kontekstual:** Pembacaan kartu tidak sekadar membacakan kamus template, melainkan menggabungkan observasi intuisi posisi (kartu 1: akar batin; kartu 2: pergulatan/tantangan internal; kartu 3: lentera langkah) serta dinamika energi arcana (Swords untuk overthinking/pikiran bising, Cups untuk kerentanan rasa, Wands untuk ritme energi, Pentacles untuk kepastian nyata, Major untuk siklus besar hidup).
 - **Struktur Tiga Bab:** Setiap kartu diuraikan dalam tiga bab bertahap: Makna batin, Langkah nyata sehari-hari, dan Refleksi hening.
+- **Ekspresi Vokal Alami:** Disertai filler vokal intuitif (*"emmm"*, *"hmm"*, *"wah"*, *"waduh"*) dan jeda elipsis pada prompt Gemini Live untuk menghasilkan intonasi percakapan yang hidup dan bernyawa.
 
 Satu koneksi dipakai sepanjang sesi. Bacaan pertama disiapkan saat tiga kartu sudah dipilih; bagian berikutnya disiapkan saat bagian saat ini berbicara. PCM dimainkan per potongan dengan penyangga 35 ms, tanpa menunggu satu respons selesai. Latensi layanan/jaringan tetap dapat terjadi. Suara hanya Gemini; jika layanan gagal, pesan di game meminta pemain melanjutkan dengan teks.
 
