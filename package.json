@@ -1,0 +1,13 @@
+{
+  "name": "tarot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "node scripts/check.mjs && node scripts/ui-check.mjs",
+    "build": "npm run check && node scripts/build.mjs"
+  }
+}
