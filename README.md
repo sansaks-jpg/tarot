@@ -1,6 +1,6 @@
 # The Tarot Room
 
-Game tarot tiga kartu untuk HP dan desktop. Pengunjung memilih topik dan pertanyaan, mengambil tiga kartu, lalu mendengarkan Sela membacakan satu per satu. Tanpa akun. Game langsung membuka pilihan pertanyaan; tersedia koleksi kartu terpisah, tanpa beranda, riwayat, atau jurnal.
+Game tarot tiga kartu untuk HP dan desktop. Beranda HP langsung mempertemukan pengunjung dengan Sela di meja tarot: “Mau baca tarot?” Pilih bacaan atau lihat-lihat koleksi kartu. Sapaan Sela bisa didengarkan setelah sentuhan jika suara tersedia. Beranda desktop tetap menampilkan tiga kartu klasik, pilihan topik, dan panduan singkat. Pengunjung memilih topik dan pertanyaan, mengambil tiga kartu, lalu mendengarkan Sela membacakan satu per satu. Gratis dan tanpa akun. Bacaan yang sedang berjalan bisa dilanjutkan setelah kembali ke beranda.
 
 ## Lokal
 
@@ -34,6 +34,17 @@ SITE_URL=https://domain-kamu
 
 Simpan `GEMINI_API_KEY` sebagai secret. `SITE_URL` merupakan alamat publik untuk canonical dan sitemap; tetapkan juga pada environment build Pages. Jangan memasukkan key ke kode browser atau `public`.
 
+## Navigasi dan Alur
+
+Aplikasi memiliki lima rute berbasis hash tanpa reload halaman:
+- `#beranda`: Di HP, menampilkan *arrival screen* hangat bersama Sela (“Mau baca tarot?”) lengkap dengan tombol audio sambutan interaktif dan dua pilihan aksi. Di desktop, menampilkan layar sambutan komprehensif dengan cuplikan kartu, pintasan topik, serta panduan 3 langkah.
+- `#bacaan`: Pemilihan topik (Asmara, Karir, Diri, Hari Ini) dan pertanyaan atau input bebas.
+- `#pilih`: Meja kocok kartu (7 kandidat acak) untuk memilih 3 kartu tarot.
+- `#baca`: Sesi visual novel interaktif di meja tarot. Kartu dibuka satu per satu dengan narasi Sela (teks dan audio Gemini Live jika diaktifkan).
+- `#kartu`: Galeri katalog 78 kartu Rider–Waite–Smith lengkap dengan modal detail, makna tegak/terbalik, kata kunci, dan saran refleksi.
+
+Navigasi atas (`.room-nav`) memudahkan perpindahan antara Beranda, Baca Tarot (yang otomatis mengarahkan ke langkah bacaan aktif bila sesi sedang berjalan), dan Koleksi Kartu.
+
 ## Suara
 
 Browser meminta token sementara ke server, lalu tersambung langsung ke Gemini Live. REST token memakai `bidiGenerateContentSetup` untuk mengunci model, voice dan instruksi. Konfigurasi `liveConnectConstraints` adalah bentuk SDK, bukan field REST yang diterima endpoint saat pemeriksaan ini.
@@ -42,7 +53,7 @@ Satu koneksi dipakai sepanjang sesi. Bacaan pertama disiapkan saat tiga kartu su
 
 Pertanyaan pribadi tidak dikirim ke Gemini. Hanya nama kartu dan teks bacaan yang dikirim. Suara dimulai setelah sentuhan pemain. Musik memakai berkas ambient dengan loop, efek memakai rekaman kartu; musik mengecil saat Sela berbicara. Tombol volume mengatur musik, efek dan narasi.
 
-Layar pemilihan dan bacaan mengikuti tinggi viewport HP. Teks narasi dibagi menjadi bagian pendek; bagian berikutnya muncul setelah suara selesai, dan pemain membuka setiap kartu sendiri. Kartu yang terbuka dapat disentuh untuk melihat detail. Koleksi kartu memakai halaman terpisah.
+Di HP, foto Sela yang sama (`welcome-room.webp`) tetap menjadi latar dari beranda, pilihan pertanyaan, pemilihan kartu, hingga bacaan dan hasil. Latar dipasang sekali di luar layar yang berganti; kartu dan panel percakapan berada di atas meja. Layar pemilihan dan bacaan mengikuti tinggi viewport HP. Teks narasi dibagi menjadi bagian pendek; bagian berikutnya muncul setelah suara selesai, dan pemain membuka setiap kartu sendiri. Kartu yang terbuka dapat disentuh untuk melihat detail. Koleksi kartu memakai halaman terpisah.
 
 ## Aset
 
@@ -52,6 +63,6 @@ Foto ruang/pembaca merupakan aset generatif. Palette dan logo mengikuti referens
 
 ## Pemeriksaan
 
-`npm run check` memeriksa data 78 kartu, batas tiga kartu, simpan/ekspor, input HTML, template layar, konfigurasi Cloudflare, dan penjadwalan PCM/koneksi/cache Gemini. Pemeriksaan ini berjalan tanpa hasil build sebelumnya.
+`npm run check` memeriksa data 78 kartu, batas tiga kartu, simpan/ekspor, input HTML, template layar, backdrop persisten mobile, batas ukuran aset WebP, adaptasi beranda mobile/desktop, alur navigasi dan pelestarian sesi, konfigurasi Cloudflare, serta penjadwalan PCM/koneksi/cache Gemini. Pemeriksaan ini berjalan tanpa hasil build sebelumnya.
 
 `npm run build` menjalankan pemeriksaan sumber, membuat `dist`, lalu menjalankan `npm run check:build` untuk memeriksa streaming byte-range dari berkas yang baru dibuat. Pemeriksaan server memanggil handler langsung tanpa menyalakan server tambahan atau membaca `.env`. Urutan ini juga berlaku pada checkout baru di Cloudflare. Browser tetap diperlukan untuk memeriksa animasi, tata letak, kebijakan autoplay, dan suara nyata.

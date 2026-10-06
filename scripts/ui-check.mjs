@@ -19,9 +19,18 @@ for (const card of deck.DECK) {
 assert.equal(nextChapter("makna"), "langkah");
 assert.equal(nextChapter("refleksi"), null);
 const nodes = new Map();
+const navLinks = ["beranda", "bacaan", "kartu"].map(nav => ({
+  dataset: {nav},
+  attributes: {},
+  setAttribute(name, value) { this.attributes[name] = value; },
+  removeAttribute(name) { delete this.attributes[name]; },
+}));
 const doc = {
   body: {dataset:{}},
-  querySelector() { return null; },
+  querySelector(selector) {
+    return selector === '[data-nav="bacaan"]' ? navLinks[1] : null;
+  },
+  querySelectorAll(selector) { return selector === "[data-nav]" ? navLinks : []; },
   getElementById(id) {
     if (!nodes.has(id))
       nodes.set(id, {
@@ -35,6 +44,7 @@ const doc = {
     return nodes.get(id);
   },
 };
+const mobileQuery = { matches: false };
 const context = vm.createContext({
   ...deck,
   ...engine,
@@ -43,7 +53,7 @@ const context = vm.createContext({
   nextChapter,
   document: doc,
   performance: { now: () => 10000 },
-  matchMedia: () => ({ matches: false }),
+  matchMedia: (query) => query === "(max-width: 699px)" ? mobileQuery : { matches: false },
   console,
   setTimeout,
   clearTimeout,
@@ -56,6 +66,13 @@ const source = await fs.readFile(
   new URL("../public/app.js", import.meta.url),
   "utf8",
 );
+const shell = await fs.readFile(new URL("../public/index.html", import.meta.url), "utf8");
+assert.equal((shell.match(/class="room-backdrop"/g)||[]).length,1);
+assert.ok(shell.indexOf('class="room-backdrop"') < shell.indexOf('<main id="main"'));
+const welcomeImage = await fs.readFile(new URL("../public/assets/welcome-room.webp", import.meta.url));
+assert.equal(welcomeImage.toString("ascii",0,4),"RIFF");
+assert.equal(welcomeImage.toString("ascii",8,12),"WEBP");
+assert.ok(welcomeImage.length < 200000);
 vm.runInContext(
   source
     .slice(0, source.indexOf("\ndocument.addEventListener("))
@@ -63,19 +80,70 @@ vm.runInContext(
   context,
 );
 vm.runInContext('render({focus:false})',context);
+assert.equal(doc.body.dataset.screen,'beranda');
+assert.match(nodes.get('main').innerHTML,/Di balik kartu/);
+assert.match(nodes.get('main').innerHTML,/href="#bacaan"[^>]*data-reading-link/);
+assert.match(nodes.get('main').innerHTML,/Mulai baca tarot/);
+assert.equal((nodes.get('main').innerHTML.match(/data-action="choose-topic"/g)||[]).length,4);
+assert.equal((nodes.get('main').innerHTML.match(/class="welcome-card /g)||[]).length,3);
+assert.equal(navLinks[0].attributes['aria-current'],'page');
+assert.equal(navLinks[1].attributes['aria-current'],undefined);
+mobileQuery.matches = true;
+vm.runInContext('render({focus:false})',context);
+const mobileHome = nodes.get('main').innerHTML;
+assert.match(mobileHome,/arrival-screen/);
+assert.match(mobileHome,/Mau baca tarot\?/);
+assert.match(mobileHome,/Mau, bacain aku/);
+assert.match(mobileHome,/href="#kartu"[^>]*><svg[\s\S]*Lihat-lihat kartu dulu/);
+assert.equal((mobileHome.match(/class="arrival-choice /g)||[]).length,2);
+assert.doesNotMatch(mobileHome,/welcome-hero|welcome-topics|welcome-guide/);
+assert.doesNotMatch(mobileHome,/class="room-backdrop"/);
+mobileQuery.matches = false;
+vm.runInContext('render({focus:false})',context);
+assert.match(nodes.get('main').innerHTML,/Di balik kartu/);
+vm.runInContext('location.hash="#bacaan"; render({focus:false})',context);
 assert.equal(doc.body.dataset.screen,'bacaan');
 assert.match(nodes.get('main').innerHTML,/Pilih pertanyaanmu/);
 assert.doesNotMatch(nodes.get('main').innerHTML,/Beranda|Riwayat|Simpan catatan/);
+assert.equal(navLinks[0].attributes['aria-current'],undefined);
+assert.equal(navLinks[1].attributes['aria-current'],'page');
+for (const topic of Object.keys(deck.TOPICS)) {
+  vm.runInContext(`beginTopic('${topic}'); render({focus:false})`,context);
+  const form = vm.runInContext('state.form',context);
+  assert.equal(form.topic,topic);
+  assert.equal(form.question,deck.TOPICS[topic].templates[0]);
+  assert.match(nodes.get('main').innerHTML,new RegExp(`value="${topic}" checked`));
+}
+vm.runInContext('beginTopic("__proto__"); beginTopic("invalid")',context);
+assert.equal(vm.runInContext('state.form.topic',context),'diri');
+vm.runInContext('location.hash="#unknown"; render({focus:false})',context);
+assert.equal(doc.body.dataset.screen,'beranda');
+vm.runInContext('location.hash="#pilih"; render({focus:false})',context);
+assert.equal(doc.body.dataset.screen,'bacaan');
 vm.runInContext(
   "state.reading=newReading('umum','Rahasia pribadi <script>',3)",
   context,
 );
 const r = vm.runInContext("state.reading", context);
+vm.runInContext('location.hash="#beranda"; render({focus:false})',context);
+assert.match(nodes.get('main').innerHTML,/href="#pilih"[^>]*data-reading-link/);
+assert.match(nodes.get('main').innerHTML,/Lanjutkan bacaanku/);
+assert.equal(vm.runInContext('state.reading',context),r);
+assert.equal(navLinks[1].href,'#pilih');
+mobileQuery.matches = true;
+vm.runInContext('render({focus:false})',context);
+assert.match(nodes.get('main').innerHTML,/Lanjut cerita kita\?/);
+assert.match(nodes.get('main').innerHTML,/href="#pilih"[^>]*data-reading-link/);
+assert.equal(vm.runInContext('state.reading',context),r);
+mobileQuery.matches = false;
 assert.equal(
   (vm.runInContext("pick()", context).match(/class="pick-card /g) || []).length,
   7,
 );
 for (const id of r.candidates.slice(0, 3)) engine.chooseCard(r, id);
+vm.runInContext('render({focus:false})',context);
+assert.match(nodes.get('main').innerHTML,/href="#baca"[^>]*data-reading-link/);
+assert.equal(navLinks[1].href,'#baca');
 const readyPick = vm.runInContext("pick()", context);
 assert.match(readyPick, /3 \/ 3/);
 assert.ok(
@@ -164,5 +232,5 @@ try {
   globalThis.fetch = originalFetch;
 }
 console.log(
-  "PASS: direct reading entry, seven-card choice, three-card completion without history UI, escaped input, complete story text, and Cloudflare REST token configuration/error handling.",
+  "PASS: persistent mobile room backdrop and image budget, reader welcome and two choices, unchanged desktop entry, all topic shortcuts, navigation state and reading resume, direct reading links, seven-card choice, three-card completion, escaped input, complete story text, and Cloudflare REST token configuration/error handling.",
 );

@@ -11,3 +11,4 @@ dist/
 .dev.vars
 .dev.vars.*
 temp_assets/
+copy_phone.ps1

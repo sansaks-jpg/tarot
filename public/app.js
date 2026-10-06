@@ -21,10 +21,11 @@ import { narrator } from "./narrator.js?v=room-4";
 
 const main = document.getElementById("main");
 const modal = document.getElementById("modal");
+const mobileHomeQuery = matchMedia("(max-width: 699px)");
 const state = {
   reading: null,
   form: { topic: "umum", question: "", count: 3 },
-  route: "bacaan",
+  route: "beranda",
   filter: "all",
   search: "",
   libraryPage: 0,
@@ -107,6 +108,102 @@ function setHash(hash) {
 function resumeRoute() {
   const r = state.reading;
   return !r ? "bacaan" : r.selected.length === 3 ? "baca" : "pilih";
+}
+
+function mobileWelcome(hasReading) {
+  const cardsIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="11" height="17" rx="2"/><path d="m5 5-3 1 4 16 4-1m3-13 2 3-2 3-2-3z"/></svg>';
+  return page(
+    `<div class="arrival-scene" aria-hidden="true">
+      <div class="arrival-light light-left" aria-hidden="true"></div>
+      <div class="arrival-light light-right" aria-hidden="true"></div>
+    </div>
+    <div class="arrival-table" aria-hidden="true">
+      <p>Kartunya sudah siap.</p>
+      <div class="arrival-stack"><span>${art("back")}</span><span>${art("back")}</span><span>${art("back")}</span></div>
+    </div>
+    <div class="arrival-dialogue">
+      <div class="arrival-speaker"><span><span aria-hidden="true">✦</span> Sela <small>· pembaca tarotmu</small></span><button type="button" class="arrival-voice" id="arrivalVoice" data-action="greeting" aria-label="Dengarkan sapaan Sela" aria-pressed="false" ${state.voiceAvailable ? "" : "hidden"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 5 9H2v6h3l4 4zM14 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg><span>Dengar Sela</span></button></div>
+      <p class="arrival-hello">${hasReading ? "Eh, kamu balik. Sini, duduk lagi." : "Hai, sini duduk dulu."}</p>
+      <h1 tabindex="-1">${hasReading ? "Lanjut cerita kita?" : "Mau baca tarot?"}</h1>
+      <p class="arrival-invitation">${hasReading ? "Kartumu masih di sini. Kita lanjut pelan-pelan, ya." : "Aku temani kamu, satu kartu demi satu kartu. Atau mau kenalan dulu sama kartunya?"}</p>
+      <div class="arrival-choices">
+        <a class="arrival-choice choice-reading" href="#${hasReading ? resumeRoute() : "bacaan"}" data-reading-link>${cardsIcon}<span>${hasReading ? "Iya, lanjutkan bacaanku" : "Mau, bacain aku"}</span>${arrow}</a>
+        <a class="arrival-choice choice-explore" href="#kartu"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="7" height="14" rx="1"/><rect x="14" y="5" width="7" height="14" rx="1"/><path d="M6.5 9v6m11-6v6"/></svg><span>Lihat-lihat kartu dulu</span>${arrow}</a>
+      </div>
+      <p class="arrival-voice-status" id="arrivalVoiceStatus" role="status" aria-live="polite"></p>
+      <p class="arrival-reassurance">Santai. Di sini, nggak perlu buru-buru.</p>
+    </div>`,
+    "arrival-screen",
+  );
+}
+
+function home() {
+  const topicNotes = {
+    hubungan: "Tentang hati dan orang terdekat.",
+    kerja: "Arah baru untuk langkahmu.",
+    diri: "Kembali mendengarkan dirimu.",
+    umum: "Apa pun yang sedang kamu pikirkan.",
+  };
+  const hasReading = state.reading && !state.reading.finished;
+  if (mobileHomeQuery.matches) return mobileWelcome(hasReading);
+  return page(
+    `<div class="welcome-hero">
+      <div class="welcome-copy">
+        <p class="welcome-eyebrow"><span aria-hidden="true">✦</span> SELAMAT DATANG DI THE TAROT ROOM</p>
+        <h1 tabindex="-1">Di balik kartu,<br>ada cerita<br><em>untukmu.</em></h1>
+        <p class="welcome-description">Ambil jeda dari ramainya hari. Pilih pertanyaan, buka tiga kartu, dan temukan sudut pandang baru bersama Sela.</p>
+        <div class="welcome-actions">
+          <a class="button primary welcome-start" href="#${hasReading ? resumeRoute() : "bacaan"}" data-reading-link>${hasReading ? "Lanjutkan bacaanku" : "Mulai baca tarot"} ${arrow}</a>
+          <a class="welcome-collection" href="#kartu">Kenali kartunya <span aria-hidden="true">↗</span></a>
+        </div>
+        <p class="welcome-assurance"><span aria-hidden="true">✓</span> Gratis <span class="assurance-dot" aria-hidden="true">·</span> Tanpa akun <span class="assurance-dot" aria-hidden="true">·</span> Sesuai ritmemu</p>
+        <div class="welcome-host">${readerPortrait()}<div><span>KENALAN DENGAN SELA</span><p>“Aku temani kamu, satu kartu demi satu kartu.”</p><small>Pembaca tarot virtualmu</small></div></div>
+      </div>
+      <div class="welcome-art">
+        <div class="welcome-orbit" aria-hidden="true"></div>
+        <span class="welcome-moon" aria-hidden="true">☾</span>
+        <span class="welcome-spark spark-one" aria-hidden="true">✧</span>
+        <span class="welcome-spark spark-two" aria-hidden="true">✦</span>
+        <span class="welcome-spark spark-three" aria-hidden="true">✧</span>
+        <p class="art-inscription" aria-hidden="true">EVERY CARD TELLS A STORY</p>
+        <div class="welcome-deck" aria-label="Kenali tiga kartu tarot klasik">
+          ${[
+            ["m18", "moon"],
+            ["m19", "sun"],
+            ["m17", "star"],
+          ].map(([id, name]) => `<button type="button" class="welcome-card welcome-card-${name}" data-action="card-detail" data-id="${id}" aria-label="Kenali ${esc(BY_ID[id].name)}"><img src="/assets/cards/${id}.webp" width="400" height="667" alt="${esc(BY_ID[id].name)}" ${name === "star" ? 'fetchpriority="high"' : 'decoding="async"'}></button>`).join("")}
+        </div>
+        <div class="art-spread" aria-hidden="true"><span>Masa lalu</span><span>✦</span><span>Masa kini</span><span>✦</span><span>Masa depan</span></div>
+        <p class="art-caption">Tiga kartu. Satu cerita milikmu.</p>
+        <p class="art-hint">Sentuh kartu untuk mengenalnya</p>
+      </div>
+    </div>
+    <div class="welcome-details" aria-label="Tentang permainan">
+      <p><span aria-hidden="true">✦</span> <strong>78 kartu klasik</strong><span class="detail-note">Rider–Waite–Smith</span></p>
+      <p><span aria-hidden="true">◷</span> <strong>Tanpa terburu-buru</strong><span class="detail-note">Buka kartu satu per satu</span></p>
+      <p><span aria-hidden="true">♡</span> <strong>Ruang untuk dirimu</strong><span class="detail-note">Bacaan berbahasa Indonesia</span></p>
+    </div>
+    <section class="welcome-topics" aria-labelledby="welcomeTopicsTitle">
+      <div class="welcome-section-heading"><div><p class="eyebrow">MULAI DARI CERITAMU</p><h2 id="welcomeTopicsTitle">Apa yang ada di pikiranmu?</h2></div><p>Pilih yang paling dekat denganmu.<br>Sela akan menemanimu dari sana.</p></div>
+      <div class="welcome-topic-grid">${["hubungan", "kerja", "diri", "umum"].map(key => `<button type="button" class="welcome-topic" data-action="choose-topic" data-topic="${key}"><span class="welcome-topic-icon" aria-hidden="true">${icons[key]}</span><strong>${TOPICS[key].label}</strong><span class="welcome-topic-note">${topicNotes[key]}</span><span class="welcome-topic-arrow" aria-hidden="true">↗</span></button>`).join("")}</div>
+    </section>
+    <section class="welcome-guide" aria-labelledby="welcomeGuideTitle">
+      <div><p class="eyebrow">PERTAMA KALI MAIN?</p><h2 id="welcomeGuideTitle">Sesederhana<br>mengikuti rasa.</h2></div>
+      <ol class="welcome-guide-steps">
+        <li><span>01</span><div><h3>Bawa satu pertanyaan</h3><p>Pilih topik dan pertanyaan yang ingin kamu jelajahi.</p></div></li>
+        <li><span>02</span><div><h3>Pilih tiga kartu</h3><p>Kartu dikocok. Ambil tiga yang menarik perhatianmu.</p></div></li>
+        <li><span>03</span><div><h3>Dengarkan ceritanya</h3><p>Buka satu per satu. Sela menemanimu memahami maknanya.</p></div></li>
+      </ol>
+    </section>
+    <footer class="welcome-footer"><span>The Tarot Room <span aria-hidden="true">✦</span></span><p>Ambil jeda. Temukan sudut pandang.</p><a href="#${hasReading ? resumeRoute() : "bacaan"}" data-reading-link>${hasReading ? "Lanjutkan bacaan" : "Masuk ke ruang tarot"} ${arrow}</a></footer>`,
+    "welcome-screen",
+  );
+}
+
+function beginTopic(topic) {
+  if (!Object.hasOwn(TOPICS, topic)) return;
+  state.form = { topic, question: TOPICS[topic].templates[0], count: 3 };
+  setHash("bacaan");
 }
 
 function setup() {
@@ -663,31 +760,78 @@ async function startSound() {
   }
 }
 
+async function greetSela(button) {
+  const status = document.getElementById("arrivalVoiceStatus");
+  const reset = () => {
+    if (!button.isConnected) return;
+    button.dataset.active = "false";
+    button.setAttribute("aria-pressed", "false");
+    button.setAttribute("aria-label", "Dengarkan sapaan Sela");
+    button.querySelector("span").textContent = "Dengar Sela";
+  };
+  if (button.dataset.active === "true") {
+    narrator.stop();
+    reset();
+    status.textContent = "";
+    return;
+  }
+  await startSound();
+  if (state.route !== "beranda" || !button.isConnected) return;
+  if (!audioEnabled() || !state.voiceAvailable) return;
+  const job = state.typingJob;
+  button.dataset.active = "true";
+  button.setAttribute("aria-label", "Hentikan sapaan Sela");
+  button.querySelector("span").textContent = "Sebentar…";
+  const hasReading = state.reading && !state.reading.finished;
+  const greeting = hasReading
+    ? "Eh, kamu balik. Sini, duduk lagi. Lanjut cerita kita? Kartumu masih di sini. Kita lanjut pelan-pelan, ya."
+    : "Hai, sini duduk dulu. Mau baca tarot? Aku temani kamu, satu kartu demi satu kartu. Atau mau kenalan dulu sama kartunya?";
+  try {
+    await narrator.speak(greeting, "Sambutan Sela", (value, speaking) => {
+      if (!button.isConnected || job !== state.typingJob) return;
+      button.setAttribute("aria-pressed", String(!!speaking));
+      if (speaking) {
+        button.querySelector("span").textContent = "Sela menyapa";
+        status.textContent = "";
+      } else if (value && !value.startsWith("Menyiapkan")) {
+        reset();
+        status.textContent = "Suara belum tersedia. Kita ngobrol lewat teks dulu, ya.";
+      }
+    }, reset);
+  } catch {
+    if (!button.isConnected || job !== state.typingJob) return;
+    reset();
+    status.textContent = "Suara belum tersedia. Kita ngobrol lewat teks dulu, ya.";
+  }
+}
+
 function render({ focus = true } = {}) {
-  const parts = (location.hash.slice(1) || "bacaan").split("/");
+  const parts = (location.hash.slice(1) || "beranda").split("/");
   let route = parts[0] === "main" ? state.route : parts[0];
-  if (!["bacaan", "pilih", "baca", "kartu"].includes(route)) route = "bacaan";
+  if (!["beranda", "bacaan", "pilih", "baca", "kartu"].includes(route)) route = "beranda";
   if (["pilih", "baca"].includes(route) && !state.reading) route = "bacaan";
   if (route === "baca" && state.reading.selected.length !== 3) route = "pilih";
   clearTimeout(state.typeTimer);
   clearTimeout(state.dialogueTimer);
   state.typingJob++;
   state.typing = false;
-  narrator.stop({ disconnect: route === "kartu" });
+  narrator.stop({ disconnect: ["beranda", "kartu"].includes(route) });
   state.route = route;
   document.body.dataset.screen = route;
   closeModal();
-  main.innerHTML = { bacaan: setup, pilih: pick, baca: reader, kartu: library }[
+  main.innerHTML = { beranda: home, bacaan: setup, pilih: pick, baca: reader, kartu: library }[
     route
   ]();
-  const switcher = document.getElementById("roomSwitcher");
-  if (switcher) {
-    switcher.href = route === "kartu" ? "#" + resumeRoute() : "#kartu";
-    switcher.textContent = route === "kartu" ? "Baca tarot" : "Lihat kartu";
-  }
-  const readingLink = document.querySelector("[data-reading-link]");
-  if (readingLink) readingLink.href = "#bacaan";
-  document.title = `${{ bacaan: "Baca Tarot", pilih: "Pilih Kartu", baca: "Bacaan Tarot", kartu: "Koleksi 78 Kartu" }[route]} — The Tarot Room`;
+  const readingLink = document.querySelector('[data-nav="bacaan"]');
+  if (readingLink) readingLink.href = "#" + resumeRoute();
+  const navRoute = ["pilih", "baca"].includes(route) ? "bacaan" : route;
+  document.querySelectorAll("[data-nav]").forEach(link => {
+    if (link.dataset.nav === navRoute) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
+  document.title = route === "beranda"
+    ? "The Tarot Room — Ada Cerita di Balik Kartu"
+    : `${{ bacaan: "Baca Tarot", pilih: "Pilih Kartu", baca: "Bacaan Tarot", kartu: "Koleksi 78 Kartu" }[route]} — The Tarot Room`;
   if (route === "kartu") {
     fillLibrary();
     if (BY_ID[parts[1]]) cardModal(parts[1]);
@@ -789,7 +933,7 @@ document.addEventListener("click", async (event) => {
     main.focus();
     return;
   }
-  const start = event.target.closest("[data-reading-link], #roomSwitcher");
+  const start = event.target.closest("[data-reading-link]");
   if (start && !start.getAttribute("href").startsWith("#kartu")) {
     startSound();
     narrator.prefetch();
@@ -806,6 +950,11 @@ document.addEventListener("click", async (event) => {
   }
   try {
     if (action === "close") closeModal();
+    else if (action === "greeting") await greetSela(button);
+    else if (action === "choose-topic") {
+      beginTopic(button.dataset.topic);
+      startSound();
+    }
     else if (action === "edit") setHash("bacaan");
     else if (action === "new") {
       state.reading = null;
@@ -916,7 +1065,16 @@ document.addEventListener("click", async (event) => {
       try {
         await toggleAudio();
         updateAudioUI();
-        if (!audioEnabled()) narrator.stop();
+        if (!audioEnabled()) {
+          narrator.stop();
+          const greeting = document.getElementById("arrivalVoice");
+          if (greeting) {
+            greeting.dataset.active = "false";
+            greeting.setAttribute("aria-pressed", "false");
+            greeting.setAttribute("aria-label", "Dengarkan sapaan Sela");
+            greeting.querySelector("span").textContent = "Dengar Sela";
+          }
+        }
         else if (state.route === "baca") {
           narrator.unlock();
           startDialogue();
@@ -998,6 +1156,9 @@ modal.addEventListener("click", (event) => {
 });
 
 window.addEventListener("hashchange", () => render());
+mobileHomeQuery.addEventListener("change", () => {
+  if (state.route === "beranda") render({ focus: false });
+});
 updateAudioUI();
 render({ focus: false });
 
@@ -1007,6 +1168,8 @@ fetch("/api/config")
     narrator.configure(config || {});
     state.voiceAvailable = narrator.mode !== "none";
     state.voiceMode = narrator.mode;
+    const greeting = document.getElementById("arrivalVoice");
+    if (greeting) greeting.hidden = !state.voiceAvailable;
     if (state.route === "baca") render({ focus: false });
     else if (state.route === "bacaan") narrator.prefetch();
   })

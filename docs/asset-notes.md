@@ -24,6 +24,16 @@ Prompt: cinematic vertical 4:5 photograph from the visitor's seat at a tarot tab
 
 Derivatif: `room-mobile.webp` 29.7 KB, `room.webp` 78.8 KB, `presence-mobile.webp` 16.8 KB, `presence.webp` 42.4 KB, `felt.webp` 5.0 KB, `reader.webp` 4.0 KB. Crop/resizing/compression menggunakan `scripts/prepare-assets.py`; gambar asli tidak ditimpa.
 
+## Beranda mobile: sambutan Sela
+
+`public/assets/welcome-room.webp` adalah versi foto ruang yang diperpanjang vertikal menggunakan built-in `image_gen.imagegen`, dengan `public/assets/room.webp` sebagai gambar acuan. Sumber dan gambar ruang sebelumnya tetap utuh; aset ini menjadi latar tetap sepanjang alur game mobile.
+
+Sumber PNG: `C:\Users\WORKPLUS\.codex\generated_images\01a10f5d-3e29-7963-9248-9236f0f97738\exec-31c5c24d-21bc-426e-8274-26ab7926b0b6.png`.
+
+Prompt: extend and outpaint the same photograph into approximately 9:20; preserve Sela's face, identity, dark wavy hair, welcoming eye contact, burgundy shawl, cream blouse, hands, curtains, library, candles, and photographic warmth. Extend above with matching curtains and bookshelves, and below with the same burgundy velvet table. Face in the upper quarter, hands around 45%, quiet table space in the lower half. Keep both candles visible. No cards, crystals, new people, text, logos, borders, or UI. Photorealistic, warm, intimate, calm, full-bleed opaque portrait.
+
+Derivatif WebP dikompresi dengan Sharp untuk web: 841 × 1870 px, 121.8 KB. Dialog, pilihan, dan kartu tertutup ditampilkan sebagai elemen game terpisah. Foto ini tidak berupa video atau animasi wajah; cahaya dan kemunculan dialog memakai animasi CSS yang mengikuti preferensi reduced motion.
+
 ## Logo
 
 Background cutout memakai tool `image_gen.imagegen` dengan referensi logo pemilik, transparency true. Prompt: remove only the off-white background, preserve the lettering, cards and stars, don't redesign the logo, crop empty margins.
