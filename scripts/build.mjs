@@ -19,7 +19,7 @@ if (siteURL) {
   let html = await readFile(new URL('index.html', output), 'utf8');
   html = html.replace('</head>', ` <link rel="canonical" href="${escape(siteURL)}/">\n <meta property="og:url" content="${escape(siteURL)}/">\n</head>`);
   html = html.replace('content="/assets/social.png"', `content="${escape(siteURL)}/assets/social.png"`);
-  html = html.replace(/(<script type="application\/ld\+json">)(.*?)(<\/script>)/, (_, open, data, close) => {
+  html = html.replace(/(<script type="application\/ld\+json">)(.*?)(<\/script>)/s, (_, open, data, close) => {
     return open + JSON.stringify({...JSON.parse(data), url: `${siteURL}/`}).replace(/</g, '\\u003c') + close;
   });
   await writeFile(new URL('index.html', output), html);

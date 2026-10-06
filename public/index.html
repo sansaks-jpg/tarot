@@ -1,56 +1,138 @@
 <!doctype html>
 <html lang="id">
-<head>
- <meta charset="utf-8">
- <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
- <meta name="theme-color" content="#a68bfa">
- <title>Sela — Main tarot, kenali kartumu</title>
- <meta name="description" content="Baca tarot dengan panduan berbahasa Indonesia. Pilih satu atau tiga kartu, pahami simbol dan maknanya, lalu tulis catatanmu. Gratis, tanpa login.">
- <meta property="og:type" content="website">
- <meta property="og:title" content="Sela — Main tarot, kenali kartumu">
- <meta property="og:description" content="Pilih mode, kocok kartu, dan buka maknanya. Tarot untuk pemula dengan ilustrasi berwarna, animasi, dan suara. Tanpa login.">
- <meta property="og:image" content="/assets/social.png">
- <meta name="twitter:card" content="summary_large_image">
- <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
- <link rel="stylesheet" href="/styles.css">
- <link rel="preload" href="/assets/cards/m17.svg" as="image">
- <script type="module" src="/app.js"></script>
- <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"Sela","description":"Panduan tarot berbahasa Indonesia untuk pemula, dengan 78 kartu dan catatan pribadi.","applicationCategory":"LifestyleApplication","operatingSystem":"Any","inLanguage":"id","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"IDR"}}</script>
-</head>
-<body>
- <div class="game-sky" aria-hidden="true"><span class="sky-planet"></span><span class="sky-orbit"></span><span class="sky-star star-a"></span><span class="sky-star star-b"></span><span class="sky-star star-c"></span><span class="sky-cloud cloud-a"></span><span class="sky-cloud cloud-b"></span></div>
- <a class="skip-link" href="#main">Langsung ke isi</a>
- <header class="site-header">
-  <a class="wordmark" href="#beranda" aria-label="Sela, lobby"><svg class="brand-icon" viewBox="0 0 40 40" aria-hidden="true"><path d="m20 3 5 11 12 6-12 5-5 12-6-12-11-5 11-6z"/><path d="M15 19h1m8 0h1M17 24q3 3 6 0"/></svg>sela<span class="logo-badge">TAROT CLUB</span></a>
-  <nav class="desktop-nav" aria-label="Navigasi utama"><a href="#beranda">Lobby</a><a href="#bacaan">Main tarot</a><a href="#kartu">Koleksi kartu</a><a href="#catatan">Jurnal</a></nav>
-  <div class="sound-control">
-   <button class="sound-toggle" id="soundToggle" type="button" data-action="sound" aria-pressed="false" aria-label="Nyalakan backsound dan efek suara"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4zM16 9l5 6m0-6-5 6"/></svg><span>Suara mati</span></button>
-   <button class="volume-toggle" id="volumeToggle" hidden type="button" data-action="volume" aria-expanded="false" aria-controls="soundSettings" aria-label="Atur volume"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></svg></button>
-   <div class="sound-settings" id="soundSettings" hidden><label for="soundVolume">Volume <output id="volumeLabel">32%</output></label><input id="soundVolume" type="range" min="0" max="100" value="32" aria-label="Volume backsound dan efek suara"><p>Musik & efek kartu.</p></div>
-  </div>
- </header>
- <main id="main" tabindex="-1">
-  <section class="game-lobby wrap" aria-labelledby="homeHeading">
-   <div class="lobby-board">
-    <div class="lobby-hud"><span class="hud-chip"><span class="status-dot"></span> SIAP DIMAINKAN</span><span class="hud-chip yellow">78 KARTU</span></div>
-    <div class="lobby-copy"><span class="lobby-kicker">SELA TAROT CLUB</span><h1 id="homeHeading" tabindex="-1">Satu pertanyaan.<br><span>Buka kartumu!</span></h1><p>Pilih kartu, lihat gambarnya, kenali maknanya.<br>Pertama kali main? Kamu akan dipandu.</p></div>
-    <div class="lobby-stage">
-     <div class="table-ring" aria-hidden="true"></div>
-     <span class="stage-sticker sticker-star" aria-hidden="true"><svg viewBox="0 0 60 60"><path d="m30 3 8 18 20 8-20 8-8 20-8-20-20-8 20-8z"/><path d="M23 29v3m14-3v3M25 38q5 4 10 0"/></svg></span>
-     <span class="stage-sticker sticker-moon" aria-hidden="true"><svg viewBox="0 0 70 70"><path d="M47 7c-26-9-47 19-32 41 12 17 38 13 46-4-23 6-38-19-14-37z"/><path d="M27 34v3m10-4v3M28 44q5 3 9-1"/></svg></span>
-     <a href="#kartu/m18" class="lobby-card card-left" aria-label="Coba lihat kartu The Moon"><img src="/assets/cards/m18.svg" width="280" height="460" alt="Kartu The Moon"></a>
-     <a href="#kartu/m19" class="lobby-card card-right" aria-label="Coba lihat kartu The Sun"><img src="/assets/cards/m19.svg" width="280" height="460" alt="Kartu The Sun"></a>
-     <a href="#kartu/m17" class="lobby-card card-middle" aria-label="Coba lihat kartu The Star"><img src="/assets/cards/m17.svg" width="280" height="460" alt="Kartu The Star"></a>
-     <span class="stage-hint">Ketuk kartu untuk mengintip artinya</span>
-    </div>
-    <div class="lobby-menu"><a class="button primary play-button" href="#bacaan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 4 13 8-13 8z"/></svg>Main tarot<span aria-hidden="true">→</span></a><div class="lobby-shortcuts"><a class="button secondary" href="#panduan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8a3 3 0 1 1 5 2c-2 1-2 2-2 4m0 4v.1"/><circle cx="12" cy="12" r="10"/></svg>Cara main</a><a class="button mint" href="#kartu"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="12" height="17" rx="2"/><path d="M4 7v14h12m-3-13 3 4-3 4-3-4z"/></svg>Koleksi kartu</a></div><p class="lobby-footnote">Gratis · Tanpa login · Semua kartu dijelaskan</p><div id="resumeReading"></div></div>
-   </div>
-  </section>
- </main>
- <footer class="site-footer wrap"><span>Tarot untuk refleksi & bermain.</span><button class="footer-link" data-action="about">Tentang & privasi</button></footer>
- <nav class="mobile-nav" aria-label="Navigasi ponsel"><a href="#beranda" data-nav="beranda"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8M5 9v12h5v-7h4v7h5V9"/></svg><span>Lobby</span></a><a href="#bacaan" data-nav="bacaan"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="m12 7 3 5-3 5-3-5z"/></svg><span>Main</span></a><a href="#kartu" data-nav="kartu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v15M12 6C8 3 4 4 3 5v15c3-2 6-2 9 0 3-2 6-2 9 0V5c-1-1-5-2-9 1"/></svg><span>Koleksi</span></a><a href="#catatan" data-nav="catatan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h13v18H7zM4 7h6M4 12h6M4 17h6M12 8h5M12 12h5"/></svg><span>Jurnal</span></a></nav>
- <dialog id="modal" aria-labelledby="modalTitle"><div id="modalBody"></div></dialog>
- <div class="toast" id="toast" role="status" aria-live="polite"></div>
- <noscript><div class="noscript">Aktifkan JavaScript untuk memilih kartu dan membaca maknanya. Sela menggunakan pengocokan kartu langsung di peramban.</div></noscript>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#faf8f5" />
+    <title>Sela — Main tarot, kenali kartumu</title>
+    <meta
+      name="description"
+      content="Baca tarot dengan panduan berbahasa Indonesia. Pilih satu atau tiga kartu, pahami simbol dan maknanya, lalu tulis catatanmu. Gratis, tanpa login."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Sela — Main tarot, kenali kartumu" />
+    <meta
+      property="og:description"
+      content="Pilih mode, kocok kartu, dan buka maknanya. Tarot untuk pemula dengan ilustrasi berwarna, animasi, dan suara. Tanpa login."
+    />
+    <meta property="og:image" content="/assets/social.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="preload" href="/assets/cards/m17.svg" as="image" />
+    <script type="module" src="/app.js"></script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Sela",
+        "description": "Panduan tarot berbahasa Indonesia untuk pemula, dengan 78 kartu dan catatan pribadi.",
+        "applicationCategory": "LifestyleApplication",
+        "operatingSystem": "Any",
+        "inLanguage": "id",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "IDR" }
+      }
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Langsung ke isi</a>
+    <header class="site-header">
+      <a class="wordmark" href="#beranda" aria-label="Sela, beranda"
+        ><span class="brand-star" aria-hidden="true">✦</span>sela<span
+          class="brand-tag"
+          >TAROT</span
+        ></a
+      >
+      <div class="header-tools">
+        <button
+          class="icon-button"
+          type="button"
+          data-action="guide"
+          aria-label="Cara bermain"
+        >
+          ?
+        </button>
+        <div class="sound-control">
+          <button
+            class="icon-button sound-toggle"
+            id="soundToggle"
+            type="button"
+            data-action="sound"
+            aria-pressed="true"
+            aria-label="Matikan musik dan efek suara"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M11 5 6 9H3v6h3l5 4zM16 9l5 6m0-6-5 6" />
+            </svg>
+          </button>
+          <button
+            class="icon-button"
+            id="volumeToggle"
+            type="button"
+            data-action="volume"
+            aria-expanded="false"
+            aria-controls="soundSettings"
+            aria-label="Atur volume"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M4 17h16M8 4v6m8 4v6" />
+            </svg>
+          </button>
+          <div class="sound-settings" id="soundSettings" hidden>
+            <label for="soundVolume"
+              >Volume <output id="volumeLabel">100%</output></label
+            >
+            <input
+              id="soundVolume"
+              type="range"
+              min="0"
+              max="100"
+              value="100"
+              aria-label="Volume musik dan efek suara"
+            />
+            <p>Musik & efek kartu. Bisa dimatikan kapan saja.</p>
+          </div>
+        </div>
+      </div>
+    </header>
+    <main id="main" tabindex="-1"></main>
+    <nav class="app-nav" aria-label="Navigasi utama">
+      <a href="#beranda" data-nav="beranda"
+        ><svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m3 11 9-8 9 8M5 9v12h5v-7h4v7h5V9" /></svg
+        ><span>Beranda</span></a
+      >
+      <a href="#bacaan" data-nav="bacaan"
+        ><svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="6" y="3" width="12" height="18" rx="3" />
+          <path d="m12 7 3 5-3 5-3-5z" /></svg
+        ><span>Main</span></a
+      >
+      <a href="#kartu" data-nav="kartu"
+        ><svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M12 5v15M12 6C8 3 4 4 3 5v15c3-2 6-2 9 0 3-2 6-2 9 0V5c-1-1-5-2-9 1"
+          /></svg
+        ><span>Koleksi</span></a
+      >
+      <a href="#catatan" data-nav="catatan"
+        ><svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 3h13v18H7zM4 7h6M4 12h6M4 17h6M12 8h5M12 12h5" /></svg
+        ><span>Jurnal</span></a
+      >
+    </nav>
+    <dialog id="modal" aria-labelledby="modalTitle">
+      <div id="modalBody"></div>
+    </dialog>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <noscript
+      ><div class="noscript">
+        Aktifkan JavaScript untuk memilih kartu dan membaca maknanya.
+      </div></noscript
+    >
+  </body>
 </html>
