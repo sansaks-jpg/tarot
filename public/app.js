@@ -18,9 +18,9 @@ import {
   sfx,
   primeAudio,
 } from "./audio.js?v=room-7";
-import { cardStory, nextChapter } from "./story.js?v=room-7";
-import { narrator } from "./narrator.js?v=room-7";
-import { getClipText, getCardClips, pickRandomVariant, readingScript, findClipId } from "./naskah.js?v=room-7";
+import { cardStory, nextChapter } from "./story.js?v=sela-audio-2";
+import { narrator } from "./narrator.js?v=sela-audio-2";
+import { getClipText, getCardClips, pickRandomVariant, readingScript, findClipId } from "./naskah.js?v=sela-audio-2";
 import { captionSegments, captionIndex } from "./captions.js?v=room-7";
 import { roomLayout } from "./room-layout.js?v=room-7";
 import { createShareImage, websiteURL, shareInvitation, canSharePhoto, sharePhoto } from "./share.js?v=room-7";

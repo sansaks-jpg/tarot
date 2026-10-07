@@ -1,4 +1,4 @@
-import { getCardClips, getClipText } from "./naskah.js?v=room-7";
+import { getCardClips, getClipText } from "./naskah.js?v=sela-audio-2";
 
 // Short, complete text passages for the visual novel reader.
 export function passages(text, limit = 190) {

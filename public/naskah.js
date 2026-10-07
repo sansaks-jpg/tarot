@@ -2540,7 +2540,7 @@ export function getClipText(id) {
 }
 
 export function getClipAudioUrl(id) {
-  return `/assets/audio/clips/${id}.mp3`;
+  return `/assets/audio/clips/${id}.mp3?v=sela-audio-2`;
 }
 
 export function pickRandomVariant(prefix) {

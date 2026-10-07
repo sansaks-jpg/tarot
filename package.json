@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "check": "node scripts/check.mjs && node scripts/ui-check.mjs && node scripts/narrator-check.mjs && node scripts/audio-check.mjs && node scripts/share-check.mjs",
+    "check": "node scripts/check.mjs && node scripts/ui-check.mjs && node scripts/narrator-check.mjs && node scripts/audio-check.mjs && node scripts/narration-loudness-check.mjs && node scripts/share-check.mjs",
     "check:build": "node scripts/server-check.mjs",
     "serve": "node scripts/serve.mjs",
     "sync:audio": "node ../text-to-speech/compress-to-tarot.mjs",

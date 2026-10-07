@@ -4,12 +4,14 @@ import vm from "node:vm";
 import { findClipId, getClipAudioUrl } from "../public/naskah.js";
 
 const requests = [], sources = [], ducking = [];
-let enabled = true, failure = false, blockedId = null, release;
+let enabled = true, failure = false, blockedId = null, release, level = 100;
+const speechGain = { gain: { value: 0, setTargetAtTime(value) { this.value = value; } }, connect(node) { this.output = node; } };
+const limiter = { threshold: {}, knee: {}, ratio: {}, attack: {}, release: {}, connect(node) { this.output = node; } };
 const ctx = {
   state: "running", currentTime: 0, destination: {},
   async resume() {},
-  createGain: () => ({ gain: { setTargetAtTime() {} }, connect() {} }),
-  createDynamicsCompressor: () => ({ threshold: {}, ratio: {}, connect() {} }),
+  createGain: () => speechGain,
+  createDynamicsCompressor: () => limiter,
   decodeAudioData: async data => ({ duration: 20, data }),
   createBufferSource() {
     const source = {
@@ -23,11 +25,11 @@ const ctx = {
 };
 const scope = vm.createContext({
   findClipId, getClipAudioUrl, getAudioContext: () => ctx,
-  narratorVolume: () => 100, audioEnabled: () => enabled,
+  narratorVolume: () => level, audioEnabled: () => enabled,
   duckMusic(value) { ducking.push(value); },
   fetch: async url => {
     requests.push(url);
-    assert.match(url, /^\/assets\/audio\/clips\/[^/]+\.mp3$/, "The narrator can request only local recorded MP3 assets");
+    assert.match(url, /^\/assets\/audio\/clips\/[^/?]+\.mp3\?v=sela-audio-2$/, "The narrator requests cache-versioned local recorded MP3 assets");
     if (url.includes(blockedId || "no-match")) await new Promise(resolve => { release = resolve; });
     return { ok: !failure, arrayBuffer: async () => new ArrayBuffer(8) };
   },
@@ -45,6 +47,21 @@ assert.equal(requests.length, 1);
 assert.deepEqual(sources[0].started, { at: 0, offset: 0 });
 assert.equal(statuses.at(-1).speaking, true);
 assert.equal(ducking.at(-1), true);
+assert.equal(speechGain.output, limiter);
+assert.equal(limiter.output, ctx.destination);
+assert.equal(limiter.knee.value, 0);
+assert.ok(limiter.threshold.value >= -2, "Normalized speech passes without the previous low-threshold compression");
+assert.ok(limiter.ratio.value >= 12, "The compressor protects only loud peaks");
+assert.equal(speechGain.gain.value, 1);
+level = 50;
+n.volume();
+assert.equal(speechGain.gain.value, 0.5, "Slider still attenuates the normalized recording");
+level = 0;
+n.volume();
+assert.equal(speechGain.gain.value, 0);
+assert.equal(ducking.at(-1), false);
+level = 100;
+n.volume();
 ctx.currentTime = 4.25;
 assert.equal(n.playback().elapsed, 4.25);
 assert.equal(n.pause(), true);
@@ -75,6 +92,8 @@ const beforeUnknown = requests.length;
 await n.speak("Unregistered or partially matching text", "Card");
 assert.equal(requests.length, beforeUnknown, "Unknown text never creates an API request or picks an unrelated recording");
 enabled = false;
+n.volume();
+assert.equal(speechGain.gain.value, 0, "Global mute silences normalized narration");
 await n.speak("m01-M1", "Card");
 assert.equal(requests.length, beforeUnknown);
 enabled = true;
@@ -113,4 +132,4 @@ assert.match(failedStatuses.at(-1).text, /Rekaman belum tersedia/);
 assert.equal(n.playing, null);
 assert.equal(n.pendingClips.size, 0);
 assert.equal(ducking.at(-1), false);
-console.log("PASS: prerecorded-only local requests, exact matching, cached playback, pause/resume offset, cancellation and late-download isolation, preload deduplication, bounded cache, mute, and visible missing-audio recovery (simulated AudioContext).");
+console.log("PASS: cache-versioned prerecorded requests, peak protection, independent level/mute, exact matching, cached playback, pause/resume offset, cancellation isolation, preload deduplication, bounded cache, and missing-audio recovery (simulated AudioContext).");

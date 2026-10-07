@@ -1,5 +1,5 @@
 import { narratorVolume, audioEnabled, duckMusic, getAudioContext } from "./audio.js?v=room-7";
-import { findClipId, getClipAudioUrl } from "./naskah.js?v=room-7";
+import { findClipId, getClipAudioUrl } from "./naskah.js?v=sela-audio-2";
 
 // Only recorded clips are playable. A caption must match an exact script or ID.
 export class RecordedNarrator {
@@ -20,8 +20,13 @@ export class RecordedNarrator {
         if (!this.ctx) return;
         this.gain = this.ctx.createGain();
         const limiter = this.ctx.createDynamicsCompressor();
-        limiter.threshold.value = -10;
-        limiter.ratio.value = 6;
+        // Clips are loudness-normalized offline. Only catch peaks here;
+        // the old -10 dB soft knee compressed ordinary speech back down.
+        limiter.threshold.value = -1;
+        limiter.knee.value = 0;
+        limiter.ratio.value = 20;
+        limiter.attack.value = 0.002;
+        limiter.release.value = 0.08;
         this.gain.connect(limiter);
         limiter.connect(this.ctx.destination);
       }

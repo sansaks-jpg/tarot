@@ -33,11 +33,15 @@ Urutan narasi: sambutan, pengisian cerita dan tanggapannya, mengocok, memilih, p
 
 Audio dimulai setelah interaksi. Volume musik/efek dan suara Sela dapat diatur terpisah; musik mengecil ketika Sela berbicara. Jeda/lanjut mempertahankan posisi audio. Pramuat berbagi unduhan dengan pemutaran, dan cache hasil decode dibatasi delapan klip. Bila rekaman gagal dimuat, caption tetap berjalan dengan status yang terlihat.
 
+Seluruh 422 MP3 Sela dinormalisasi secara offline ke target −16 LUFS agar level antarrekaman lebih rata. Puncak diukur kembali setelah encoding dan harus berada di bawah −1,5 dBTP. Kompresor browser hanya menangkap puncak di atas −1 dB, sehingga tidak menekan narasi yang sudah dinormalisasi. Slider tetap 0–100%. Versi URL audio diperbarui agar browser mengambil rekaman baru.
+
+Untuk menyiapkan rekaman baru setelah sinkronisasi sumber, jalankan `node scripts/normalize-narration.mjs temp_assets/normalized-narration` dengan FFmpeg tersedia di PATH. Skrip memproses dari MP3 sumber ke folder terpisah, mengukur hasil encoding setiap klip, dan memeriksa bahwa durasi hasil decode tetap sama. Setelah semua klip lolos, salin MP3 hasil ke `public/assets/audio/clips` dan `loudness-report.json` ke `docs/narration-loudness.json`, lalu perbarui versi URL audio. Laporan menyimpan hasil ukur dan SHA-256 tiap berkas; build akan menolak rekaman yang diganti tanpa memperbarui pengukuran. FFmpeg tidak diperlukan saat build atau pemutaran web.
+
 ## Aset dan pemeriksaan
 
 78 kartu Rider–Waite–Smith dari [TarotCards — mixvlad](https://github.com/mixvlad/TarotCards/tree/main/tarot/rider-waite), dengan WebP 400 px dan thumbnail 240 px. Foto ruang/pembaca merupakan aset generatif. Sumber, kredit, dan catatan aset ada di [docs/asset-notes.md](docs/asset-notes.md).
 
-`npm run check` memeriksa data/mesin kartu, sintaks, 422 pasangan naskah dan MP3, seluruh makna asli, alur form/dialog, reset topik, caption menurut waktu audio termasuk kembali dari background, paginasi, volume terpisah, pembuatan dan pengiriman foto, serta URL konfigurasi. AudioContext, Canvas, dan Web Share disimulasikan pada pemeriksaan ini. `npm run build` menambahkan pemeriksaan byte-range MP3/musik dan akses server.
+`npm run check` memeriksa data/mesin kartu, sintaks, 422 pasangan naskah dan MP3, hash rekaman terhadap laporan loudness, seluruh makna asli, alur form/dialog, reset topik, caption menurut waktu audio termasuk kembali dari background, paginasi, volume terpisah, pembuatan dan pengiriman foto, serta URL konfigurasi. AudioContext, Canvas, dan Web Share disimulasikan pada pemeriksaan ini. `npm run build` menambahkan pemeriksaan byte-range MP3/musik dan akses server.
 
 Pengecekan browser pada 7 Oktober 2026 dibatasi pada posisi kartu di meja, sesuai izin pemilik. Lolos pada 280×400, 320×480, 320×568, 360×640, 375×667, 390×844, 412×915, 430×932, 480×640, 640×360, 844×390, 768×1024, dan 1280×800: enam tahap tampilan per ukuran, tujuh pengamatan animasi dengan 390 frame, serta 18 tangkapan layar. Kartu terukur tetap di dalam area meja, di bawah wajah Sela, dan tidak membuat halaman bergulir. Kebijakan autoplay, hasil share di aplikasi tujuan, dan pendengaran audio pada perangkat nyata belum diuji.
 
